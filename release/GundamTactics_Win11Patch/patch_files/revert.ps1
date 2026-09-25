@@ -1,12 +1,13 @@
-# v1.0.16
+# v1.1.0
 param([string]$InstallPath = "")
 
 $ErrorActionPreference = "Stop"
 $ExpectedOriginalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
 $ExpectedRuntimeSha256 = "dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f"
-$ExpectedProxySha256 = "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2"
-# QTIM32.DLL proxies of v1.0.10-v1.0.14, which this revert also removes.
+$ExpectedProxySha256 = "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489"
+# QTIM32.DLL proxies of v1.0.10-v1.0.16, which this revert also removes.
 $KnownPreviousProxySha256 = @(
+    "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2",
     "08e39f76c954248d1f92541e9c4f0b9a46604d97ed1187469164377f0e7397b1",
     "3aaab62914d904198bf22472614532032adc438bbdd412eaa62af18ef701abf6",
     "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c"

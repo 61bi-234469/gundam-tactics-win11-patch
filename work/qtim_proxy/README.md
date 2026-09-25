@@ -117,6 +117,24 @@ thread, after leaving `g_state_lock`; an unknown HWND causes no probe. It
 does not remove or dispatch messages, and is logged once as `message_pump`
 when compatibility tracing is enabled.
 
+Window scaling (`display_scale.c`, v1.1.0) replaces every DC request on the
+main "Gundam" window with one 576x416 32bpp memory DC: the main executable's
+`GetDC`/`ReleaseDC` and the original runtime's (`QTIM32R.DLL`)
+`GetDC`/`GetDCEx`/`ReleaseDC` IAT entries, plus the proxy's own SMC frame
+drawing (`gt_scale_get_dc`). Each acquisition does `SaveDC`, each release
+`RestoreDC`. Draw calls into that DC (`BitBlt`, `StretchBlt`,
+`StretchDIBits`, `PatBlt`, `SetPixel`; the runtime's `BitBlt`, `PatBlt`,
+`SetDIBitsToDevice`, `FillRect`) mark it dirty, and it is stretched onto
+the window on DC release, on the game's `PeekMessageA`/`GetMessageA`, and
+from a helper thread after 12 ms without drawing. A window subclass maps
+mouse `lParam` back to 576x416, repaints from the memory DC, hides resizes
+from the game (it only sees minimize and the restore after it), and toggles
+borderless fullscreen on Alt+Enter. From the movie paths above, queued
+`WM_NCLBUTTONDOWN`/`DBLCLK` on the caption, border or maximize button are
+dispatched so the window can be moved and resized during movies.
+`[display] scale=off` (or `QTIM_DISPLAY_SCALE=off`) installs nothing.
+`work/tools/qtdraw_probe` logs the original runtime's drawing calls.
+
 The game accepts input only when `GetMessageTime()` is strictly newer than
 the last stamp it stored, and WM_MOUSEMOVE also updates that stamp, so a
 click in the same GetTickCount tick as a mouse move was dropped. The proxy

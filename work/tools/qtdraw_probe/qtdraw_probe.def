@@ -1,0 +1,36 @@
+LIBRARY QTIM32R
+EXPORTS
+    _EntryPoint      = thunk_2   @2
+    Flip16           = thunk_101 @101
+    Flip16Many       = thunk_102 @102
+    Flip32           = thunk_103 @103
+    Flip32Many       = thunk_104 @104
+    FreeMemory       = thunk_105 @105
+    GetMemory        = thunk_107 @107
+    ReallocateMemory = thunk_109 @109
+    VidWindowHook    = thunk_315 @315
+    thunk_505 @505 NONAME
+    thunk_506 @506 NONAME
+    thunk_507 @507 NONAME
+    thunk_508 @508 NONAME
+    thunk_509 @509 NONAME
+    thunk_510 @510 NONAME
+    thunk_511 @511 NONAME
+    thunk_512 @512 NONAME
+    thunk_513 @513 NONAME
+    thunk_514 @514 NONAME
+    thunk_515 @515 NONAME
+    thunk_516 @516 NONAME
+    thunk_517 @517 NONAME
+    thunk_518 @518 NONAME
+    thunk_519 @519 NONAME
+    thunk_520 @520 NONAME
+    thunk_521 @521 NONAME
+    thunk_522 @522 NONAME
+    thunk_523 @523 NONAME
+    thunk_524 @524 NONAME
+    thunk_525 @525 NONAME
+    thunk_526 @526 NONAME
+    thunk_527 @527 NONAME
+    thunk_528 @528 NONAME
+    thunk_529 @529 NONAME

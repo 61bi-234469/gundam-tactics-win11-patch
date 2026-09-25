@@ -19,6 +19,7 @@
 - ムービーが暗転する、またはスキップされる問題 (QuickTime 互換プロキシ `QTIM32.dll` / `CMGR32.dll`)
 - フェード演出の代わりに画面が上下反転する問題
 - インストール先パスの長さ制限、港画面の縦線など
+- ゲーム画面の拡大表示 (ウィンドウのサイズ変更・最大化・Alt+Enter で全画面、v1.1.0)
 
 各バージョンの変更点は [CHANGELOG.txt](release/GundamTactics_Win11Patch/CHANGELOG.txt) を参照してください。
 

@@ -284,33 +284,36 @@ try {
     Invoke-Revert $upgrade
     Assert-CleanRevert $upgrade "upgrade final revert"
 
-    Write-Host "--- v1.0.14 QTIM32 proxy upgrades in place; revert removes MidiLoop copies ---"
-    $previousZip = Join-Path $repoRoot "release\GundamTactics_Win11Patch_v1.0.14.zip"
-    if (Test-Path -LiteralPath $previousZip) {
-        $proxyUpgrade = New-TestCopy "proxyupgrade"
+    foreach ($previous in @(
+        @{ Version = "v1.0.14"; Sha256 = "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c" },
+        @{ Version = "v1.0.16"; Sha256 = "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2" }
+    )) {
+        $label = "proxyupgrade" + ($previous.Version -replace "[^0-9]", "")
+        Write-Host ("--- {0} QTIM32 proxy upgrades in place; revert removes MidiLoop copies ---" -f $previous.Version)
+        $previousZip = Join-Path $repoRoot ("release\GundamTactics_Win11Patch_{0}.zip" -f $previous.Version)
+        if (-not (Test-Path -LiteralPath $previousZip)) { Write-Host "SKIP: $previousZip not found"; continue }
+        $proxyUpgrade = New-TestCopy $label
         Invoke-Apply $proxyUpgrade
         $previousArchive = [IO.Compression.ZipFile]::OpenRead($previousZip)
         try {
             $entry = $previousArchive.GetEntry("patch_files/QTIM32.dll")
-            if (-not $entry) { throw "v1.0.14 ZIP has no patch_files/QTIM32.dll" }
+            if (-not $entry) { throw ("{0} ZIP has no patch_files/QTIM32.dll" -f $previous.Version) }
             $stream = $entry.Open()
             try {
                 $target = [IO.File]::Create((Join-Path $proxyUpgrade "QTIM32.DLL"))
                 try { $stream.CopyTo($target) } finally { $target.Dispose() }
             } finally { $stream.Dispose() }
         } finally { $previousArchive.Dispose() }
-        Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c" "proxyupgrade v1.0.14 QTIM32.DLL"
+        Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") $previous.Sha256 ("{0} {1} QTIM32.DLL" -f $label, $previous.Version)
         Invoke-Apply $proxyUpgrade
-        Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") $proxySha256 "proxyupgrade upgraded QTIM32.DLL"
-        Assert-Hash (Join-Path $proxyUpgrade "QTIM32R.DLL") $runtimeSha256 "proxyupgrade QTIM32R.DLL"
+        Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") $proxySha256 "$label upgraded QTIM32.DLL"
+        Assert-Hash (Join-Path $proxyUpgrade "QTIM32R.DLL") $runtimeSha256 "$label QTIM32R.DLL"
         $midiLoop = Join-Path $proxyUpgrade "MidiLoop"
         New-Item -ItemType Directory -Path $midiLoop -Force | Out-Null
         [IO.File]::WriteAllBytes((Join-Path $midiLoop "M02gm.mid"), [byte[]](0x4d, 0x54, 0x68, 0x64))
         Invoke-Revert $proxyUpgrade
-        Assert-CleanRevert $proxyUpgrade "proxyupgrade final revert"
-        Assert-NotExists $midiLoop "proxyupgrade MidiLoop"
-    } else {
-        Write-Host "SKIP: $previousZip not found"
+        Assert-CleanRevert $proxyUpgrade "$label final revert"
+        Assert-NotExists $midiLoop "$label MidiLoop"
     }
 
     Write-Host "--- install.ps1: quoted path with a trailing backslash arrives with a stray quote ---"
@@ -451,7 +454,7 @@ try {
     Assert-LayerValue $rollbackExe $null "rollback AppCompat value"
     Assert-CleanRevert $rollback "rollback final"
 
-    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14 proxy upgrade and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, and rollback all passed."
+    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14/v1.0.16 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, and rollback all passed."
 } finally {
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_AFTER_APP_COMPAT -ErrorAction SilentlyContinue
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_REGISTRY_FILE -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-﻿# v1.0.16 - install.bat / uninstall.bat から呼ばれる対話インストーラー。
+﻿# v1.1.0 - install.bat / uninstall.bat から呼ばれる対話インストーラー。
 # 実際のファイル操作は apply.ps1 / revert.ps1 が行う。
 param(
     [ValidateSet("install", "uninstall")][string]$Mode = "install",
@@ -111,7 +111,7 @@ function Wait-BeforeClose {
 
 $exitCode = 1
 try {
-    Write-Title "ガンダムタクティクス Windows 11 互換パッチ v1.0.16: $action"
+    Write-Title "ガンダムタクティクス Windows 11 互換パッチ v1.1.0: $action"
 
     $dir = Resolve-GameFolder
     if (-not $dir) { throw [OperationCanceledException]::new("フォルダが選ばれませんでした。") }

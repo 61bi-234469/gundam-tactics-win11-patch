@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "controller_shared.h"
+#include "display_scale.h"
 #include "movdec.h"
 
 static HMODULE g_real = NULL;
@@ -1556,6 +1557,8 @@ static void maybe_pump_messages(HWND hwnd) {
     DWORD owner_thread;
     MSG message;
 
+    /* Every frame, not throttled: a window drag should start promptly. */
+    gt_scale_service_frame_input();
     if (!hwnd) return;
     owner_thread = GetWindowThreadProcessId(hwnd, NULL);
     if (!owner_thread || owner_thread != GetCurrentThreadId()) return;
@@ -3384,7 +3387,7 @@ static void draw_controller_frame_locked(ControllerMap *controller,
                 if (hwnd) controller->target_hwnd = hwnd;
             }
             if (hwnd) {
-                dc = GetDC(hwnd);
+                dc = gt_scale_get_dc(hwnd);
                 if (dc) release_dc = 1;
             }
             if (!dc) dc = controller->target_hdc;
@@ -3398,7 +3401,7 @@ static void draw_controller_frame_locked(ControllerMap *controller,
                     SRCCOPY);
             }
             GlobalUnlock(controller->last_dib);
-            if (release_dc) ReleaseDC(hwnd, dc);
+            if (release_dc) gt_scale_release_dc(hwnd, dc);
         }
     }
 
@@ -3567,10 +3570,13 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
     }
     if (g_selftest_requested && !g_input_selftest_done) {
         g_input_selftest_done = 1;
-        if (g_log != INVALID_HANDLE_VALUE)
+        if (g_log != INVALID_HANDLE_VALUE) {
             log_text(run_input_time_selftest() ?
                      "input_time_selftest=PASS\n" :
                      "input_time_selftest=FAIL\n");
+            log_text(gt_scale_selftest() ? "display_scale_selftest=PASS\n" :
+                                           "display_scale_selftest=FAIL\n");
+        }
     }
     if (g_selftest_requested && !g_selftest_done && !g_selftest_running) {
         g_selftest_done = 1;
@@ -4163,7 +4169,6 @@ static int midi_loop_fix_requested(HMODULE self) {
 }
 
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
-    (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         g_tls_index = TlsAlloc();
         if (g_tls_index == TLS_OUT_OF_INDEXES) return FALSE;
@@ -4258,10 +4263,19 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
             g_input_fix_enabled = install_input_iat_hooks();
         else
             log_text("input_fix=off\treason=disabled\n");
+        {
+            char ini_path[MAX_PATH];
+            gt_scale_attach(build_trace_ini_path(self, ini_path,
+                                                 sizeof(ini_path))
+                                ? ini_path : NULL,
+                            g_real, log_text);
+        }
         log_text(g_trace_enabled ? "qtim_compat_proxy attached\n" : "qtim_compat_proxy attached (trace off)\n");
     } else if (reason == DLL_THREAD_DETACH) {
         free_thread_state();
     } else if (reason == DLL_PROCESS_DETACH) {
+        /* Scaling hooks chain on top of the input hooks: undo them first. */
+        gt_scale_detach(reserved != NULL);
         if (g_input_iat_hook_count && !restore_input_iat_hooks()) {
             log_text("FATAL input IAT hook restoration failed\n");
         }

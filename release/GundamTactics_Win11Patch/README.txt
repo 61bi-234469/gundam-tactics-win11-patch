@@ -1,10 +1,13 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.0.16
+Windows 11 互換パッチ v1.1.0
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
 お手持ちのゲームをインストールしたフォルダに当てて使います。ゲーム本体のファイル
 (gundam.exe やムービー)は含まれていません。
+
+対象: 『ガンダムタクティクス MOBILITY FLEET0079 復刻版』
+      (2001年9月19日発売、Windows 95/98/Me 用)
 
 
 ■ 直ること
@@ -18,6 +21,7 @@ Windows 11 互換パッチ v1.0.16
 - ムサイのハーバー画面に縦線が出る(原作の画像データ由来)
 - クリックが効かないことがある
 - 長いフォルダ名や日本語のフォルダ名だと起動できない・NEW GAME で止まる
+- ゲーム画面が小さい(大きなウィンドウや全画面で遊べるようになります)
 
 
 ■ 用意するもの
@@ -52,6 +56,26 @@ Windows 11 互換パッチ v1.0.16
 1. ゲームを終了しておきます。
 2. 「uninstall.bat」をダブルクリックし、同じように Y を入力します。
    ゲームはパッチを当てる前の状態に戻ります。
+
+
+■ 画面の大きさ(v1.1.0 から)
+- ゲームのウィンドウは、画面に収まる大きさ(元の 576×416 の 2 倍など)で開きます。
+- ウィンドウの端をドラッグして好きな大きさにしたり、最大化したりできます。
+  縦横の比率はそのままで、余った部分は黒く表示されます。
+- Alt キーを押しながら Enter キーを押すと全画面表示になります。
+  もう一度押すと元のウィンドウに戻ります。
+- 設定を変えたいときは、ゲームのフォルダにメモ帳で「qtim_compat.ini」という
+  名前のファイルを作り、[display] の行に続けて設定を書きます。例:
+
+    [display]
+    scale=off
+
+  書ける設定:
+  - scale=off      パッチを当てる前と同じ、元の大きさ(576×416)のウィンドウに戻す
+  - scale=2        起動したときの大きさを 2 倍にする(3、4 なども指定できます)
+  - filter=nearest 拡大した絵をぼかさず、ドットのくっきりした表示にする
+  - filter=smooth  拡大した絵をいつもなめらかに表示する
+  - fullscreen=1   起動したときから全画面表示にする
 
 
 ■ ゲームのフォルダについての注意
@@ -158,6 +182,23 @@ What is fixed
   screen changes, 5 seconds at the opening movie, actions that confirm on
   button release) are unchanged. To restore the original timing, set
   `QTIM_INPUT_FIX=0` or put `[input]` / `click_fix=0` in `qtim_compat.ini`.
+- Window scaling (v1.1.0): the game draws with GDI straight into a fixed
+  576x416 window. The QTIM32 proxy now hands gundam.exe and the original
+  QuickTime runtime a 576x416 memory DC whenever they ask for a DC on the
+  main window (GetDC/ReleaseDC, and GetDCEx for QuickTime), draws the
+  proxy's own SMC frames into it, and stretches it onto the real window at
+  frame boundaries (DC release, message-queue polls, and after drawing has
+  paused). The window is resizable and maximizable, keeps the aspect ratio
+  with black bars, opens at the largest whole multiple that fits the work
+  area, and Alt+Enter toggles borderless fullscreen. Mouse coordinates are
+  mapped back to 576x416 in a window subclass. During movies, which do not
+  read the message queue, queued title-bar/border presses are dispatched so
+  the window can still be moved and resized; close, minimize, and the
+  system menu still wait for the game. Settings in `qtim_compat.ini`
+  `[display]`: `scale=auto|off|2..8` (initial size; `off` installs no hooks
+  and keeps the original window), `filter=auto|nearest|smooth` (auto:
+  nearest at whole multiples, halftone otherwise), `fullscreen=0|1`.
+  `QTIM_DISPLAY_SCALE` and `QTIM_DISPLAY_FILTER` override the INI.
 - Install folder: the original executable joined the install folder and each
   asset name in an 80-byte buffer, so a folder longer than 54 bytes failed
   with a Jfont load error or froze at START NEW GAME. The patched executable
@@ -205,9 +246,9 @@ the game folder never overwrites the game's QTIM32.DLL/CMGR32.DLL. The script ve
   script refuses to overwrite it. A failed transaction restores all files,
   registry state, and the sidecar.
 
-Updating from v1.0.2-v1.0.15: run the new apply.ps1 on the patched folder.
+Updating from v1.0.2-v1.0.16: run the new apply.ps1 on the patched folder.
 It rebuilds gundam.exe from the verified `gundam.exe.orig`; no revert is
-needed first. A QTIM32.DLL proxy from v1.0.10-v1.0.14 is replaced in place
+needed first. A QTIM32.DLL proxy from v1.0.10-v1.0.16 is replaced in place
 (QTIM32R.DLL must still be the verified original runtime). To move the game
 to a longer folder, move the whole folder
 (including `gundam.exe.orig`, QTIM32R.DLL, and CMGR32R.DLL) after applying.
@@ -267,13 +308,14 @@ Stock gundam.exe:
   38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3
 Patched gundam.exe (Phase 1 + 2 + 3b + 4 + 5):
   607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4
+The patched gundam.exe is unchanged since v1.0.16.
 Previous patched gundam.exe (accepted for upgrade):
   v1.0.13-v1.0.15: c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942
   v1.0.2-v1.0.12:  82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4
 Stock QTIM32.DLL:
   dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f
 Release QTIM32.dll proxy:
-  ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2
+  d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489
 Stock CMGR32.DLL:
   9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4
 Release CMGR32.dll companion proxy:
