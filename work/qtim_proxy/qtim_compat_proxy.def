@@ -1,0 +1,36 @@
+LIBRARY QTIM32
+EXPORTS
+    _EntryPoint      = proxy_EntryPoint       @2
+    Flip16           = proxy_Flip16           @101
+    Flip16Many       = proxy_Flip16Many       @102
+    Flip32           = proxy_Flip32           @103
+    Flip32Many       = proxy_Flip32Many       @104
+    FreeMemory       = proxy_FreeMemory       @105
+    GetMemory        = proxy_GetMemory        @107
+    ReallocateMemory = proxy_ReallocateMemory @109
+    VidWindowHook    = proxy_VidWindowHook    @315
+    proxy_ord_505 @505 NONAME
+    proxy_ord_506 @506 NONAME
+    proxy_ord_507 @507 NONAME
+    proxy_ord_508 @508 NONAME
+    proxy_ord_509 @509 NONAME
+    proxy_ord_510 @510 NONAME
+    proxy_ord_511 @511 NONAME
+    proxy_ord_512 @512 NONAME
+    proxy_ord_513 @513 NONAME
+    proxy_ord_514 @514 NONAME
+    proxy_ord_515 @515 NONAME
+    proxy_ord_516 @516 NONAME
+    proxy_ord_517 @517 NONAME
+    proxy_ord_518 @518 NONAME
+    proxy_ord_519 @519 NONAME
+    proxy_ord_520 @520 NONAME
+    proxy_ord_521 @521 NONAME
+    proxy_ord_522 @522 NONAME
+    proxy_ord_523 @523 NONAME
+    proxy_ord_524 @524 NONAME
+    proxy_ord_525 @525 NONAME
+    proxy_ord_526 @526 NONAME
+    proxy_ord_527 @527 NONAME
+    proxy_ord_528 @528 NONAME
+    proxy_ord_529 @529 NONAME

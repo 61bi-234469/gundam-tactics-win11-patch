@@ -1,0 +1,52 @@
+# ガンダムタクティクス MOBILITY FLEET0079 Windows 11 互換パッチ
+
+Win9x 向けゲーム『ガンダムタクティクス MOBILITY FLEET0079』を Windows 11 上で遊べるようにする非公式の互換パッチのソースコードです。
+
+主な修正内容:
+
+- BGM・効果音が鳴らない問題
+- ムービーが暗転する、またはスキップされる問題 (QuickTime 互換プロキシ `QTIM32.dll` / `CMGR32.dll`)
+- フェード演出の代わりに画面が上下反転する問題
+- インストール先パスの長さ制限、港画面の縦線など
+
+各バージョンの変更点は [CHANGELOG.txt](release/GundamTactics_Win11Patch/CHANGELOG.txt) を参照してください。
+
+## 利用者向け
+
+このリポジトリの GitHub Releases ページから配布用 ZIP (ビルド済み DLL を含む) をダウンロードしてください。導入手順は [README.txt](release/GundamTactics_Win11Patch/README.txt) にあります。
+
+このリポジトリには、ゲーム本体・ゲームのデータ・改変済み実行ファイル・ビルド済み DLL は含まれていません。パッチはお手元のゲームの `gundam.exe` にインストーラーがその場で適用します。ゲーム本体はご自身で用意してください。
+
+## 開発者向け
+
+### 構成
+
+| パス | 内容 |
+| --- | --- |
+| `release/GundamTactics_Win11Patch/` | 配布パッケージのテンプレート (インストーラー・README・CHANGELOG)。DLL はビルド時に追加されます |
+| `work/exe_patches/` | `gundam.exe` にバイナリパッチを当てるスクリプト (Phase 1〜5) |
+| `work/qtim_proxy/` | QuickTime 互換プロキシ DLL (`QTIM32.dll` / `CMGR32.dll`) とムービーデコーダーのソース |
+| `work/tools/` | 検証・解析用のツール |
+| `work/analysis/ghidra_scripts/` | 解析に使った Ghidra スクリプト |
+| `work/build_all.py` | パッチ適用、プロキシのビルド、配布 ZIP の作成、リリーステストまでを通しで実行するスクリプト |
+
+### ビルドに必要なもの
+
+- Windows 11
+- Python 3.10 以上
+- MSYS2 MinGW 32bit gcc (既定のパス: `C:\msys64\mingw32\bin\gcc.exe`)
+- 未改変のゲームのインストールファイル一式を `source_exe/` に置くこと (`gundam.exe` の SHA256 は `work/build_all.py` の `EXPECTED_SOURCE_SHA256` で照合されます)
+
+```
+python work/build_all.py
+```
+
+Ghidra を使う解析スクリプト (`work/tools/run_ghidra_*.ps1`) を使うときは、環境変数 `GHIDRA_INSTALL_DIR` を設定するか、`-GhidraRoot` 引数で Ghidra のインストール先を指定してください。
+
+## ライセンス
+
+このリポジトリのソースコードは [MIT License](LICENSE) で公開しています。ゲーム本体とその画像・音声・データは対象外です。
+
+## 免責
+
+ファンによる非公式の互換パッチです。原作の権利者・販売元とは関係ありません。「ガンダムタクティクス MOBILITY FLEET0079」およびその画像・音声・データの著作権は各権利者に帰属します。

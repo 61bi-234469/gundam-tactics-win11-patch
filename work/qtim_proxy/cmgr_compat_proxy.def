@@ -1,0 +1,6 @@
+LIBRARY CMGR32
+EXPORTS
+    _EntryPoint       = proxy_EntryPoint       @2
+    _CMgrInitialize   = proxy_CMgrInitialize   @3
+    _CMgrTerminate    = proxy_CMgrTerminate    @4
+    _CMgrTerminateTask = proxy_CMgrTerminateTask @5

@@ -1,0 +1,284 @@
+Gundam Tactics Windows 11 compatibility patch
+CHANGELOG
+
+v1.0.16 - 2026-09-25
+---------------------
+- Musai harbor screen: no more vertical lines. Bmp\HERBOR\MUSA.DOC is
+  587 pixels wide (all other harbor/bridge BMPs are 576) and FUN_00407200
+  draws it into 576x416 with StretchDIBits under the default BLACKONWHITE
+  stretch mode, which ANDs the 8bpp palette indices of the 11 merged columns
+  (dst x = 0, 52, 104, ... 523) into unrelated white/cyan/magenta colors.
+  This is original-data behavior, not a Windows 11 regression.
+- gundam.exe Phase 5: the StretchDIBits call at VA 0x0040738C (file 0x678C)
+  calls a code cave at VA 0x00438580 (file 0x37980, 76 bytes) that sets
+  COLORONCOLOR on the destination DC via GetModuleHandleA("GDI32.DLL") +
+  GetProcAddress("SetStretchBltMode") and tail-jumps to StretchDIBits with
+  the original arguments. Every other BMP is drawn 1:1 and is unchanged.
+- apply.ps1 upgrades a v1.0.13-v1.0.15 gundam.exe (c693d60b...) from
+  gundam.exe.orig like the v1.0.2-v1.0.12 one. QTIM32/CMGR32 proxies are
+  unchanged from v1.0.15.
+
+v1.0.15 - 2026-09-24
+---------------------
+- BGM now loops. 12 of the 13 BGM files (Sound\M*GM.MID) end their music
+  long before the End-of-Track event, e.g. M02GM.MID has 36 s of music and
+  264 s of silence, M04GM.MID 61 s and 159 s. The game restarts BGM only
+  when MCI reports the song as stopped (FUN_00421600), and the Windows 11
+  sequencer plays the silent tail in full, so BGM stopped for minutes
+  (reported during the battle count). MCI_PLAY with MCI_TO does not work
+  around it because the sequencer checks TO only at the next event.
+  When the game opens a MIDI with at least 1 s of silent tail, the QTIM32
+  proxy opens a copy in `<game>\MidiLoop\` (fallback
+  `%TEMP%\GundamTacticsMidiLoop\`) whose EOT delta times end every track on
+  the last real event; the note data is byte-identical. Verified in game:
+  M04GM.MID loops every 61.1 s (it was 220 s).
+- BGM resumes after the window is restored from minimized. The game pauses
+  the sequencer on WM_SIZE/SIZE_MINIMIZED and sends MCI_RESUME from its poll,
+  which the Windows 11 sequencer rejects (MCIERR_UNSUPPORTED_FUNCTION), so
+  BGM stayed silent. The proxy then plays from the paused position, asks for
+  the game's MM_MCINOTIFY window, and rewinds first when the song is at its
+  end (a song resumed that way reports PAUSE, not STOP, at the end).
+- Both fixes are on by default; `QTIM_MIDI_LOOP_FIX=0` or `[audio]` /
+  `midi_loop_fix=0` in qtim_compat.ini disables them. The mciSendCommandA
+  hook is now installed without tracing enabled.
+- apply.ps1 replaces a QTIM32.DLL proxy from v1.0.10-v1.0.14 in place (was
+  "not a recognized stock or proxy layout" when the proxy hash differs);
+  revert.ps1 accepts those proxies and removes the generated MidiLoop copies.
+- gundam.exe patch bytes and CMGR32.DLL are unchanged from v1.0.14.
+
+v1.0.14 - 2026-09-23
+---------------------
+- Simplified installation for general users: double-click `install.bat` /
+  `uninstall.bat`. The installer (`patch_files\install.ps1`, Japanese
+  messages) finds the game folder automatically (package folder or its
+  parent, then C:\G-TACT, then a folder dialog, or a folder dropped on the
+  .bat), asks for confirmation, refuses while the game is running, requests
+  administrator rights only when the folder is not writable, and explains
+  common failures in Japanese.
+- Package layout: the engine scripts and proxy DLLs moved to `patch_files\`,
+  so extracting the ZIP inside the game folder can no longer overwrite the
+  game's own QTIM32.DLL/CMGR32.DLL. apply.ps1 ignores the package's files
+  when it measures the game's path lengths.
+- apply.ps1/revert.ps1 strip stray quotes and trailing backslashes from
+  -InstallPath (a quoted path ending in `\` used to arrive as `...\"` and
+  failed with "invalid characters in path"). The error for an already
+  overwritten QTIM32.DLL/CMGR32.DLL now says how to recover.
+- README.txt now starts with a Japanese step-by-step guide.
+- gundam.exe patch bytes and proxy DLLs are unchanged from v1.0.13.
+
+v1.0.13 - 2026-09-23
+---------------------
+- Removed the 54-byte install-folder limit. gundam.exe built every asset
+  path as `_getcwd()` + `\` + asset name in 80-byte stack buffers (14 call
+  sites via FUN_00430F60), so a longer folder failed with a Jfont load error
+  or never drew SIDE SELECTION. Phase 4 replaces that getcwd wrapper (VA
+  0x00430F60, 10 bytes) so it returns ".", and assets are opened relative to
+  the game folder. Files, WAV/MIDI audio, QuickTime (cvid) and proxy (SMC)
+  movies were verified from a 110-byte folder with Japanese characters. The
+  proxy DLLs are unchanged.
+- apply.ps1 now allows folders up to a 256-byte full asset path (MAX_PATH)
+  instead of 80 bytes, refuses folders with characters outside the system
+  ANSI code page (the original QuickTime silently skips every movie there),
+  and upgrades a v1.0.2-v1.0.12 executable in place by
+  rebuilding it from the verified `gundam.exe.orig`.
+
+v1.0.12 - 2026-09-23
+---------------------
+- Fixed dropped mouse clicks. gundam.exe accepts input only when
+  `GetMessageTime()` is strictly newer than the last message it saw, and a
+  WM_MOUSEMOVE updates that stamp, so a click in the same GetTickCount tick
+  as a preceding mouse movement was silently discarded. The QTIM32 proxy now
+  hooks the game's `PeekMessageA`/`GetMessageA`/`GetMessageTime` imports and
+  reports button/key messages with a time strictly newer than any time
+  already reported (bumps of 1 ms, only for same-tick collisions within
+  100 ms). Mouse moves and non-input messages keep their real time. On by
+  default; `QTIM_INPUT_FIX=0` or `[input] click_fix=0` in `qtim_compat.ini`
+  turns it off. If the imports cannot be hooked, the proxy logs
+  `input_fix=off` and the game runs with the original timing.
+- `QTIM_COMPAT_SELFTEST=1` now also runs `input_time_selftest`.
+
+v1.0.11 - 2026-09-22
+---------------------
+- Added a UI-thread-only, per-thread-throttled `PeekMessageA(...,
+  PM_NOREMOVE)` probe to the QTIM32 proxy's movie-frame paths. It runs
+  outside the proxy state lock and keeps long chained warship battles from
+  being marked unresponsive while leaving the game's input queue untouched.
+- Added opt-in `mciSendCommandA` IAT tracing for BGM diagnosis. Enable it
+  with `QTIM_COMPAT_TRACE=1` plus `QTIM_MCI_TRACE=1`, or with `[trace]
+  enabled=1` and `mci=1` in `qtim_compat.ini`. The hook calls the original
+  function unchanged and logs mode changes, command results, game state, and
+  MIDI device information. Identical STATUS/MODE polls are suppressed only
+  for a complete device/command/result/mode/state/MIDI match, with a
+  five-second heartbeat carrying the suppressed count.
+- Added the `QTIM_COMPAT_SELFTEST=1` MCI hook self-test. With MCI tracing
+  enabled it calls the hook using `MCI_STATUS/MCI_STATUS_ITEM` and
+  `MCI_STATUS_MODE` on device 0, verifies the original invalid-device result
+  257, and records `mci_hook_selftest=PASS` plus the resulting `mci` row.
+- Regenerated the v1.0.11 DLLs, package checksums, deterministic ZIP, and
+  release-cycle verification. The v1.0.7 and v1.0.10 ZIP archives remain
+  preserved.
+
+v1.0.10 - 2026-09-22
+---------------------
+- Fixed the 65th-movie battle hang by forwarding `DisposeMovie` (0x07) to
+  the original QuickTime runtime after releasing proxy SMC state. Fake
+  controller arguments remain absorbed so sentinel values never reach stock
+  QuickTime.
+- Hardened 0x2C/0x2A/0x31/0x38 pending-path association: the proxy records the
+  0x2A output slot pre-call, requires the matching 0x02 close, verifies the
+  returned Movie* slot, and refuses live-handle/path collisions without
+  unbinding the existing movie or controller.
+- Corrected CMGR32 trace separators so controller diagnostics use real tabs and
+  newlines, and expanded `QTIM_COMPAT_SELFTEST=1` to cover failed 0x2A,
+  handle reuse with 0x02, and both 0x07 dispatch paths.
+- Fixed a v1.0.10 pending-file regression: CloseMovieFile (0x02) now clears
+  the pending file handle together with recording the close, so a later
+  0x31/0x38 cannot recreate a stale file-to-movie binding. The self-test now
+  expects no binding after this sequence and covers repeated file-handle use
+  while two live movies and their controllers remain intact.
+- Refined the controller-reuse self-test to use distinct movie A/B paths
+  (`HMZK_06.mov` and `GM-C_22.mov`), validate handled 0x36 results against
+  decoder duration, and skip pending-drop diagnostics when no pending state
+  exists.
+- Regenerated the v1.0.10 DLLs, package checksums, deterministic ZIP, and
+  release-cycle verification.
+
+v1.0.9 - 2026-09-22
+--------------------
+- Fixed the v1.0.8 battle-freeze regression caused by treating a reused
+  QuickTime movie handle as an old fake-controller binding. QTIM32 and CMGR32
+  now guard only when an argument equals a fake controller value, including a
+  live or retired value; ordinary movie handles are never guard keys.
+- Releasing or remapping a movie clears the old controller movie binding in
+  QTIM32, the shared journal, and CMGR32. The same cleanup is performed for
+  DisposeMovie and an associated CloseMovieFile; normal unbound 0x36/0x06
+  calls are forwarded. The v1.0.7 decoder-duration behavior for 0x12 is
+  retained.
+- Added the opt-in `QTIM_COMPAT_SELFTEST=1` controller/movie-handle reuse
+  self-test and regenerated the package, checksums, ZIP, and release-cycle
+  verification.
+
+v1.0.8 - 2026-09-22
+--------------------
+- Hardened the QTIM32/CMGR32 fake-controller lifetime guard with a PID-scoped,
+  owner/sequence-checked shared journal for movie bind/unbind and controller
+  create/dispose events. CMGR now protects its binding table with a lock and
+  clears old movie bindings before numeric movie-handle reuse.
+- Changed fake controller values to the opaque `0xFFFF` low-index form, which
+  the original Component Manager index/count check rejects; 0x38/0x37 results
+  remain traceable.
+- Moved waveOut reset, unprepare, close, prepare, and write operations outside
+  the QTIM state lock. MMRESULT failures, including WAVERR_STILLPLAYING, keep
+  driver-owned headers/handles in a retry queue.
+- Restricted the install path preflight to game-opened assets (excluding `.url`
+  shortcuts and patch sidecars); the documented maximum install-directory
+  length is now 54 ANSI/MBCS bytes.
+- Updated the controller/freeze audit notes and made development deploy
+  preflight both runtimes before an atomic, rollback-safe DLL transaction.
+
+v1.0.7 - 2026-09-22
+--------------------
+- Fixed compatibility-trace INI lookup so `qtim_compat.ini` is read from the
+  game folder beside the proxy DLL, with an absolute current-directory
+  fallback. `QTIM_COMPAT_TRACE=1` remains available and takes precedence.
+- Deployment removes stale `qtim_compat_trace.log` and
+  `cmgr_compat_trace.log` files before placing the new proxies.
+- User real-machine verification confirmed startup, BGM/SE, OP, sortie movie,
+  all three battle movie matchups and their sound effects, upright display,
+  and apply/revert behavior.
+
+v1.0.6 - 2026-09-22
+--------------------
+- Kept controller-route realtime waveOut audio untouched when GetMoviePict arrives, matching v1.0.3 and avoiding WinMM work under the QTIM32 state lock.
+
+v1.0.5 - 2026-09-22
+--------------------
+- Fixed the v1.0.4 regression where the MS vs. battleship sortie could
+  freeze because picture-mode controller clock calls stopped advancing.
+- Restored the v1.0.3 real-time controller clock and 0x36 frame drawing for
+  all SMC movies, independent of the movie's audio mode.
+- Kept movie audio lazy: 0x38/0x2F do not start audio, the first 0x36 idle
+  starts real-time audio, and a later GetMoviePict switches that movie to
+  movie-time audio after waveOutReset. GoToBeginning rewinds audio while
+  preserving its mode.
+- Added `audio_mode(handle, realtime|picture, reason)` trace records and
+  regenerated the seven-file package, checksums, ZIP, and release-cycle test.
+
+v1.0.4 - 2026-09-21
+--------------------
+- Added per-movie controller/picture drive-mode selection. NewMovieController
+  and SetMovieActive no longer start movie audio eagerly.
+- Controller-mode audio and frame drawing begin on the first controller idle
+  call (0x36); picture-mode movies stream audio only from GetMoviePict movie
+  time, and controller status calls no longer draw or start audio for them.
+- Added `movie_mode(handle, controller|picture)` trace records and reset the
+  mode, clock, and movie audio state on GoToBeginning/Dispose.
+- Regenerated the v1.0.4 seven-file package, checksums, ZIP, and release-cycle
+  test.
+
+v1.0.3 - 2026-09-21
+--------------------
+- Added QTIM32 and CMGR32 fake-controller lifetime guards. Active and retired
+  controller/movie handles are absorbed with safe defaults and logged as
+  `controller_unhandled` instead of reaching the original QuickTime runtime.
+- Changed GetMoviePict-path movie audio to movie-time-driven streaming with a
+  100 ms lookahead. Repeated timestamps do not enqueue duplicate audio, and
+  rewind/GoToBeginning resets the stream. Controller-path audio remains
+  real-time.
+- Added `audio_stream(time, bytes)` trace records, MOV audio/frame metadata,
+  and the CMGR32 offset 0x2c0f ABI audit.
+- Regenerated the v1.0.3 seven-file package, checksums, ZIP, and clean
+  release-cycle test.
+
+v1.0.2 - 2026-09-21
+--------------------
+- Completed the SMC sortie-movie controller-path emulation: the verified
+  controller route now plays 150 frames and terminates normally.
+- Added the CMGR32 companion proxy and transactional CMGR32R.DLL backup and
+  restore alongside QTIM32/QTIM32R.
+- Added an apply-time ANSI/MBCS path-length preflight for the executable's
+  80-byte fixed path buffer, with the maximum safe directory length and a
+  short-path recommendation on refusal.
+- Throttled controller_result tracing to frame changes or 250 ms, and kept
+  QTIM_COMPAT_TRACE disabled by default.
+- Regenerated both 32-bit DLLs, the seven-file package, checksums, ZIP, and
+  the clean source_exe release-cycle test.
+
+v1.0.1 - 2026-09-21
+--------------------
+- Fixed a v1.0 regression where OP and deployment movies stopped after
+  NewMovieFromFile (selector 0x2A), and New Game could remain stuck in the
+  menu.
+- Restored selector 0x2A to the proven pass-through ABI. The proxy now maps
+  the pending path recorded at 0x2C to the handle supplied by 0x31/0x38 arg0,
+  including handle reuse updates.
+- Removed the invalid post-call `call`/return-2 path that shifted the original
+  dispatcher stack arguments by four bytes.
+- Regenerated the proxy, runtime deployment, checksums, and ZIP for v1.0.1.
+
+v1.0 - 2026-09-21
+------------------
+- Integrated the verified Phase 3 display correction, part b only.
+- Made `patch_display_phase3.py` and `build_all.py` default to Phase 3(b).
+- Added byte-guarded Phase 3(b) application to the release apply transaction.
+- Updated the release executable reference hash to:
+  82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4
+- Kept Phase 3 part a diagnostic-only; real-screen A/B testing showed PUSH
+  layer inversion, so a and a+b are not distributed.
+- Updated the final README and regenerated distribution checksums.
+- Unified `build_all.py` so a clean source copy produces the patched EXE,
+  proxy, six-file allowlisted package, checksums, deterministic ZIP, and ZIP
+  checksum before atomic publication; the generated ZIP cycle test runs
+  automatically unless `--skip-release-test` is supplied.
+- AppCompat apply state (including an absent value) is stored in a game-side
+  JSON sidecar and restored by revert. Unrelated existing values without a
+  sidecar are refused rather than overwritten.
+- Revert now deletes only the hash-verified `gundam.exe.orig` after restoring
+  the original, and the release-cycle test asserts that no backup remains.
+- Added AppCompat present/absent/refusal and injected mid-transaction rollback
+  tests to the same-process PowerShell 5.1 release test.
+- Completed opt-in GDI IAT hook lifecycle handling: original slots are kept,
+  only still-self-hooked slots are restored on DLL detach, and protection
+  failures are logged and treated as failures.
+- Package contents intentionally exclude original binaries, patched EXE files,
+  and MOV assets.
