@@ -86,7 +86,7 @@ def main() -> int:
     parser.add_argument(
         "--source",
         type=Path,
-        default=(Path(__file__).resolve().parents[2] / "run" / "GT" /
+        default=(Path(__file__).resolve().parents[2] / "run" / "GT01" /
                  "Movie" / "Bombl.mov"),
     )
     args = parser.parse_args()

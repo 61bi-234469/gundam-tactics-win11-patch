@@ -1,4 +1,4 @@
-# v1.1.0
+# v1.2.0
 param(
     [string]$InstallPath = "",
     [switch]$RegisterAppCompat,
@@ -143,7 +143,7 @@ function Assert-GamePathAnsi([string]$Directory) {
         if ($encoding.GetString($encoding.GetBytes($candidate)) -cne $candidate) {
             throw ("install path contains characters that the system ANSI code page " +
                 "({0}) cannot represent: '{1}'. Move the game to a folder whose name " +
-                "uses only characters of that code page, such as C:\G-TACT.") -f
+                "uses only characters of that code page, such as C:\GundamTactics.") -f
                 $encoding.CodePage, $candidate
         }
     }
@@ -157,7 +157,7 @@ function Assert-GamePathBudget([string]$Directory) {
             "directory={0} bytes, longest relative path='{1}' ({2} bytes), " +
             "full path including separator and NUL={3} bytes (limit $MaxFullPathBytes). " +
             "Maximum allowed install-directory length is {4} ANSI/MBCS bytes; " +
-            "move the game to a shorter folder such as C:\G-TACT.") -f
+            "move the game to a shorter folder such as C:\GundamTactics.") -f
             $budget.DirectoryBytes, $budget.LongestRelative,
             $budget.LongestRelativeBytes, $budget.TotalBytes,
             $budget.MaximumDirectoryBytes)
@@ -518,7 +518,7 @@ try {
         throw "test failure injected after AppCompat commit"
     }
     $committed = $true
-    Write-Host "v1.1.0 apply committed atomically: $gameDir"
+    Write-Host "v1.2.0 apply committed atomically: $gameDir"
     if ($wantsAppCompat) { Write-Host "AppCompat pre-state saved in $sidecar" }
 } catch {
     try {

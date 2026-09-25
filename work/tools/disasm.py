@@ -1,6 +1,6 @@
 """Disassemble gundam.exe address ranges: disasm.py START END [START END ...]"""
 import struct, sys, capstone
-EXE = __file__.rsplit('work', 1)[0] + 'source_exe/gundam.exe'
+EXE = __file__.rsplit('work', 1)[0] + 'source_exe_01/gundam.exe'
 data = open(EXE, 'rb').read()
 pe = struct.unpack_from('<I', data, 0x3c)[0]
 nsec = struct.unpack_from('<H', data, pe + 6)[0]

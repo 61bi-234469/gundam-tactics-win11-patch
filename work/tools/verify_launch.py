@@ -535,7 +535,7 @@ def verify(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game-dir", type=Path,
-                        default=Path(__file__).resolve().parents[2] / "run" / "GT")
+                        default=Path(__file__).resolve().parents[2] / "run" / "GT01")
     parser.add_argument("--exe", default="gundam.exe",
                         help="executable filename directly under --game-dir")
     parser.add_argument("--wait-seconds", type=float, default=8.0)

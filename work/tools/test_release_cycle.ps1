@@ -9,10 +9,10 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$sourceDir = Join-Path $repoRoot "source_exe"
+$sourceDir = Join-Path $repoRoot "source_exe_01"
 $runRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot "run"))
 $releaseDir = Join-Path $repoRoot "release\GundamTactics_Win11Patch"
-$checksumEntries = @("install.bat", "uninstall.bat", "README.txt", "CHANGELOG.txt", "patch_files/install.ps1", "patch_files/apply.ps1", "patch_files/revert.ps1", "patch_files/QTIM32.dll", "patch_files/CMGR32.dll")
+$checksumEntries = @("install.bat", "uninstall.bat", "README.txt", "CHANGELOG.txt", "patch_files/install.ps1", "patch_files/apply.ps1", "patch_files/revert.ps1", "patch_files/import96.ps1", "patch_files/QTIM32.dll", "patch_files/CMGR32.dll")
 $expectedEntries = @($checksumEntries + "checksums.txt")
 $originalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
 $patchedSha256 = "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4"
@@ -28,7 +28,7 @@ if (-not $testRoot.StartsWith($runRoot + [IO.Path]::DirectorySeparatorChar, [Str
     throw "test directory must be below run: $testRoot"
 }
 $shortTestRoot = $null
-if (-not (Test-Path -LiteralPath $sourceDir)) { throw "source_exe not found: $sourceDir" }
+if (-not (Test-Path -LiteralPath $sourceDir)) { throw "source_exe_01 not found: $sourceDir" }
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -55,6 +55,12 @@ namespace GundamTactics {
 "@
     }
     return [GundamTactics.ShortPath]::Get($Path)
+}
+
+function Get-BytesSha256Test([byte[]]$Data) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($Data))).Replace("-", "").ToLowerInvariant() }
+    finally { $sha.Dispose() }
 }
 
 function Assert-Hash([string]$Path, [string]$Expected, [string]$Label) {
@@ -173,6 +179,8 @@ function Assert-CleanRevert([string]$Dir, [string]$Label) {
 }
 
 $archiveExtracted = $null
+$script:mounted96 = $false
+$script:tested96 = $false
 $testPackageDir = $null
 $testDirCreated = $false
 
@@ -454,10 +462,149 @@ try {
     Assert-LayerValue $rollbackExe $null "rollback AppCompat value"
     Assert-CleanRevert $rollback "rollback final"
 
-    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14/v1.0.16 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, and rollback all passed."
+    $iso96 = Join-Path $repoRoot "source_iso_96\GundamTactics.iso"
+    if (Test-Path -LiteralPath $iso96) {
+        Write-Host "--- 1996 edition: copy from the disc, expand QuickTime from qt32.exe, apply, revert ---"
+        $image96 = Get-DiskImage -ImagePath $iso96
+        if (-not $image96.Attached) {
+            Mount-DiskImage -ImagePath $iso96 -Access ReadOnly -StorageType ISO | Out-Null
+            $script:mounted96 = $true
+        }
+        $disc96 = $null
+        for ($i = 0; $i -lt 20 -and -not $disc96; $i++) {
+            $letter = (Get-DiskImage -ImagePath $iso96 | Get-Volume).DriveLetter
+            if ($letter) { $disc96 = "${letter}:\" } else { Start-Sleep -Milliseconds 500 }
+        }
+        if (-not $disc96) { throw "1996 ISO mounted without a drive letter" }
+        $discFiles96 = @(Get-ChildItem -LiteralPath $disc96 -Recurse -File -Force |
+            Where-Object { @("setup.exe", "qt32.exe", "autorun.inf") -notcontains $_.Name.ToLowerInvariant() -or $_.DirectoryName.TrimEnd('\') -ne $disc96.TrimEnd('\') })
+        $qtNames96 = @("QTIM32.DLL", "CMGR32.DLL", "MCIQTENU.Q32", "CVID32.QTC", "DCI32.QTC", "DHIO32.QTC", "IV32QT32.QTC", "JPEG32.QTC", "MC32.QTC", "NAVG32.QTC", "RAW32.QTC", "RLE32.QTC", "RPZA32.QTC", "SMC32.QTC")
+
+        function Assert-Imported96([string]$Dir, [string]$Label, [string[]]$PreExisting = @()) {
+            foreach ($file in $discFiles96) {
+                $relative = $file.FullName.Substring($disc96.Length)
+                if ($relative -ieq "gundam.exe") { continue }
+                $target = Join-Path $Dir $relative
+                Assert-Exists $target "$Label $relative"
+                if ($PreExisting -notcontains $relative -and (Get-Item -LiteralPath $target -Force).IsReadOnly) { throw "$Label $relative is read-only" }
+            }
+            Assert-Hash (Join-Path $Dir "Bmp\TITLE\TITLE.BMP") (Get-Sha256 (Join-Path $disc96 "Bmp\TITLE\TITLE.BMP")) "$Label 1996 TITLE.BMP"
+            foreach ($name in $qtNames96) {
+                if ($name -in @("QTIM32.DLL", "CMGR32.DLL")) { continue }
+                Assert-Hash (Join-Path $Dir $name) (Get-Sha256 (Join-Path $sourceDir $name)) "$Label $name"
+            }
+            foreach ($name in @("setup.exe", "qt32.exe", "autorun.inf")) { Assert-NotExists (Join-Path $Dir $name) "$Label $name" }
+            if (@(Get-ChildItem -LiteralPath $Dir -Force -Filter ".gt96_import_*").Count -ne 0) { throw "$Label import staging folder left behind" }
+        }
+
+        $gt96 = Join-Path $script:shortTestRoot "gt96"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $gt96 -Yes
+        if ($LASTEXITCODE -ne 0) { throw "install.ps1 -DiscDir failed ($LASTEXITCODE)" }
+        Assert-Hash (Join-Path $gt96 "gundam.exe") $patchedSha256 "gt96 patched gundam.exe"
+        Assert-Hash (Join-Path $gt96 "gundam.exe.orig") $originalSha256 "gt96 gundam.exe.orig"
+        Assert-Hash (Join-Path $gt96 "QTIM32.DLL") $proxySha256 "gt96 proxy QTIM32.DLL"
+        Assert-Hash (Join-Path $gt96 "QTIM32R.DLL") $runtimeSha256 "gt96 QTIM32R.DLL"
+        Assert-Hash (Join-Path $gt96 "CMGR32.DLL") $cmgrProxySha256 "gt96 proxy CMGR32.DLL"
+        Assert-Hash (Join-Path $gt96 "CMGR32R.DLL") $cmgrRuntimeSha256 "gt96 CMGR32R.DLL"
+        Assert-Imported96 $gt96 "gt96"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode uninstall -GameDir $gt96 -Yes
+        if ($LASTEXITCODE -ne 0) { throw "install.ps1 -Mode uninstall on gt96 failed ($LASTEXITCODE)" }
+        Assert-CleanRevert $gt96 "gt96 revert"
+        Assert-Imported96 $gt96 "gt96 revert"
+
+        Write-Host "--- 1996 edition: a folder that already holds the copied game is patched without copying ---"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $gt96 -Yes
+        if ($LASTEXITCODE -ne 0) { throw "install.ps1 -DiscDir on a copied folder failed ($LASTEXITCODE)" }
+        Assert-Hash (Join-Path $gt96 "gundam.exe") $patchedSha256 "gt96 second patched gundam.exe"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode uninstall -GameDir $gt96 -Yes
+        if ($LASTEXITCODE -ne 0) { throw "install.ps1 second uninstall on gt96 failed ($LASTEXITCODE)" }
+        Assert-CleanRevert $gt96 "gt96 second revert"
+
+        Write-Host "--- 1996 edition: a C:\G-TACT-like folder keeps saves and identical setup files ---"
+        $saves96 = Join-Path $script:shortTestRoot "gt96_saves"
+        New-Item -ItemType Directory -Path $saves96 -Force | Out-Null
+        [IO.File]::WriteAllBytes((Join-Path $saves96 "sfd1"), [byte[]](1..64))
+        Copy-Item -LiteralPath (Join-Path $disc96 "gundam.ico") -Destination $saves96
+        Copy-Item -LiteralPath (Join-Path $disc96 "readme.doc") -Destination $saves96
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $saves96 -Yes
+        if ($LASTEXITCODE -ne 0) { throw "install.ps1 -DiscDir into a save folder failed ($LASTEXITCODE)" }
+        Assert-Hash (Join-Path $saves96 "gundam.exe") $patchedSha256 "gt96_saves patched gundam.exe"
+        Assert-Hash (Join-Path $saves96 "sfd1") (Get-BytesSha256Test ([byte[]](1..64))) "gt96_saves sfd1 untouched"
+        Assert-Imported96 $saves96 "gt96_saves" @("gundam.ico", "readme.doc")
+
+        Write-Host "--- 1996 edition: a conflicting destination file is refused before any change ---"
+        $conflict96 = Join-Path $script:shortTestRoot "gt96_conflict"
+        New-Item -ItemType Directory -Path $conflict96 -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $conflict96 "readme.doc"), "not the disc file")
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $conflict96 -Yes
+        if ($LASTEXITCODE -ne 1) { throw "install.ps1 accepted a conflicting destination ($LASTEXITCODE)" }
+        $left96 = @(Get-ChildItem -LiteralPath $conflict96 -Force | ForEach-Object { $_.Name })
+        if ($left96.Count -ne 1 -or $left96[0] -ne "readme.doc") { throw "conflict destination changed: $($left96 -join ', ')" }
+
+        Write-Host "--- 1996 edition: the disc itself and the save folder are refused as destinations ---"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $disc96 -Yes
+        if ($LASTEXITCODE -ne 1) { throw "install.ps1 accepted the disc as destination ($LASTEXITCODE)" }
+        $saveProbe96 = "C:\G-TACT\gt96_release_test_{0}" -f ([guid]::NewGuid().ToString("N"))
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $saveProbe96 -Yes
+        if ($LASTEXITCODE -ne 1) { throw "install.ps1 accepted a folder below C:\G-TACT ($LASTEXITCODE)" }
+        Assert-NotExists $saveProbe96 "destination below the save folder"
+
+        function Get-FolderState96([string]$Dir) {
+            return @(Get-ChildItem -LiteralPath $Dir -Recurse -Force | Sort-Object FullName | ForEach-Object {
+                $hash = if ($_.PSIsContainer) { "dir" } else { Get-Sha256 $_.FullName }
+                "{0}|{1}|{2}" -f $_.FullName.Substring($Dir.Length), $hash, $_.Attributes
+            }) -join "`n"
+        }
+        foreach ($point in @("copy", "expand", "move")) {
+            Write-Host "--- 1996 edition: failure injected at '$point' restores the save folder exactly ---"
+            $inject96 = Join-Path $script:shortTestRoot "gt96_fail_$point"
+            New-Item -ItemType Directory -Path $inject96 -Force | Out-Null
+            [IO.File]::WriteAllBytes((Join-Path $inject96 "sfd1"), [byte[]](1..64))
+            Copy-Item -LiteralPath (Join-Path $disc96 "gundam.ico") -Destination $inject96
+            $before96 = Get-FolderState96 $inject96
+            $env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 = $point
+            try {
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $inject96 -Yes
+            } finally { Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue }
+            if ($LASTEXITCODE -ne 1) { throw "injected '$point' failure did not fail install.ps1 ($LASTEXITCODE)" }
+            $after96 = Get-FolderState96 $inject96
+            if ($after96 -cne $before96) { throw "save folder changed after injected '$point' failure:`n$after96" }
+            Write-Host "gt96_fail_$point folder state unchanged"
+        }
+        Write-Host "--- 1996 edition: failure injected at 'move' into a new folder removes the folder ---"
+        $injectNew96 = Join-Path $script:shortTestRoot "gt96_fail_new"
+        $env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 = "move"
+        try {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $injectNew96 -Yes
+        } finally { Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue }
+        if ($LASTEXITCODE -ne 1) { throw "injected failure into a new folder did not fail install.ps1 ($LASTEXITCODE)" }
+        Assert-NotExists $injectNew96 "new 1996 destination after injected failure"
+
+        if ($ansi.GetString($ansi.GetBytes($nonAnsiName)) -cne $nonAnsiName) {
+            Write-Host "--- 1996 edition: apply refusal after the copy removes everything the copy created ---"
+            $refused96 = Join-Path $testRoot ("gt96_" + $nonAnsiName)
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $refused96 -Yes
+            if ($LASTEXITCODE -ne 1) { throw "install.ps1 accepted a non-ANSI 1996 destination ($LASTEXITCODE)" }
+            Assert-NotExists $refused96 "non-ANSI 1996 destination"
+            $refusedSaves96 = Join-Path $testRoot ("gt96s_" + $nonAnsiName)
+            New-Item -ItemType Directory -Path $refusedSaves96 -Force | Out-Null
+            [IO.File]::WriteAllBytes((Join-Path $refusedSaves96 "sfd1"), [byte[]](1..64))
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script:installScript -Mode install -DiscDir $disc96 -GameDir $refusedSaves96 -Yes
+            if ($LASTEXITCODE -ne 1) { throw "install.ps1 accepted a non-ANSI 1996 save folder ($LASTEXITCODE)" }
+            $left96 = @(Get-ChildItem -LiteralPath $refusedSaves96 -Force | ForEach-Object { $_.Name })
+            if ($left96.Count -ne 1 -or $left96[0] -ne "sfd1") { throw "non-ANSI save folder changed: $($left96 -join ', ')" }
+        }
+        $script:tested96 = $true
+    } else {
+        Write-Host "--- skipped 1996 edition tests: source_iso_96\GundamTactics.iso not found ---"
+    }
+
+    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14/v1.0.16 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
 } finally {
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_AFTER_APP_COMPAT -ErrorAction SilentlyContinue
+    Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_REGISTRY_FILE -ErrorAction SilentlyContinue
+    if ($script:mounted96) { Dismount-DiskImage -ImagePath (Join-Path $repoRoot "source_iso_96\GundamTactics.iso") | Out-Null }
     if (-not $KeepTestDirectory -and $testDirCreated -and (Test-Path -LiteralPath $testRoot)) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force
     }

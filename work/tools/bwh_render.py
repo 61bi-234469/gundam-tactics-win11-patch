@@ -2,7 +2,7 @@
 BWH = big-endian u32 offset table followed by raw 8bpp pixels. The game UI palette is that of Bmp/Ball/Ball0.bmp (Bdec.bmp gives wrong colours)."""
 import struct, sys
 from PIL import Image
-ROOT = __file__.rsplit('work', 1)[0] + 'source_exe/'
+ROOT = __file__.rsplit('work', 1)[0] + 'source_exe_01/'
 bmp = open(ROOT + 'Bmp/Ball/Ball0.bmp', 'rb').read()
 hdr = struct.unpack_from('<I', bmp, 14)[0]
 pal = [(bmp[14 + hdr + i*4 + 2], bmp[14 + hdr + i*4 + 1], bmp[14 + hdr + i*4]) for i in range(256)]

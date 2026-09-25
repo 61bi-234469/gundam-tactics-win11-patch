@@ -25,7 +25,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]
-DEFAULT_GAME_DIR = REPO_ROOT / "run" / "GT"
+DEFAULT_GAME_DIR = REPO_ROOT / "run" / "GT01"
 CACHE_MISS_RE = re.compile(r'\bcache_miss\b.*\bpath="([^"]+)"')
 
 

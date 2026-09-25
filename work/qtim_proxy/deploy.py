@@ -25,7 +25,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]
-DEFAULT_GAME_DIR = REPO_ROOT / "run" / "GT"
+DEFAULT_GAME_DIR = REPO_ROOT / "run" / "GT01"
 LEGACY_GAME_DIR = SCRIPT_DIR.parent.parent
 PROXY_SRC = SCRIPT_DIR / "QTIM32.dll"
 CMGR_PROXY_SRC = SCRIPT_DIR / "CMGR32.dll"

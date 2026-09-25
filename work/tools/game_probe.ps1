@@ -1,5 +1,5 @@
 param(
-    [string]$GameDir = "run\GT",
+    [string]$GameDir = "run\GT01",
     [string]$OutDir = "work\analysis\screenshots\probe_run",
     # Sequence of steps: "wait:<sec>", "click:<fx>,<fy>" (window-relative 0..1), "snap:<name>", "key:<SendKeys>", "show:<SW_ code>" (3 maximize, 6 minimize, 9 restore)
     [string[]]$Steps = @("wait:5", "click:0.5,0.5", "wait:3", "snap:menu", "click:0.5,0.58", "wait:4", "snap:newgame_4s", "wait:6", "snap:newgame_10s", "wait:10", "snap:newgame_20s"),

@@ -1,5 +1,5 @@
 param(
-    [string]$GameDir = "run\GT",
+    [string]$GameDir = "run\GT01",
     [string]$OutDir = "work\analysis\screenshots\capture",
     [double[]]$Times = @(2.0, 2.5, 3.0, 3.5, 4.0),
     [hashtable]$Env = @{}

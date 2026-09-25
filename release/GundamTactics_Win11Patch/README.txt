@@ -1,13 +1,16 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.1.0
+Windows 11 互換パッチ v1.2.0
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
 お手持ちのゲームをインストールしたフォルダに当てて使います。ゲーム本体のファイル
 (gundam.exe やムービー)は含まれていません。
 
-対象: 『ガンダムタクティクス MOBILITY FLEET0079 復刻版』
-      (2001年9月19日発売、Windows 95/98/Me 用)
+対象: 01版 『ガンダムタクティクス MOBILITY FLEET0079 復刻版』
+            (2001年9月19日発売、Windows 95/98/Me 用)
+      96版 『ガンダムタクティクス MOBILITY FLEET0079』
+            (1996年発売のオリジナル版、v1.2.0 から)
+      → 96版の手順は「■ 96版(1996年のオリジナル版)の場合」を見てください。
 
 
 ■ 直ること
@@ -27,6 +30,7 @@ Windows 11 互換パッチ v1.1.0
 ■ 用意するもの
 - Windows 11
 - インストール済みのガンダムタクティクス(CD からインストールしたもの)
+  96版の場合はゲームの CD(または CD の ISO イメージ)
 
 
 ■ パッチの当て方
@@ -40,7 +44,8 @@ Windows 11 互換パッチ v1.1.0
    - セキュリティの警告や「Windows によって PC が保護されました」が出たら、
      「実行」(または「詳細情報」→「実行」)を押してください。
 5. ゲームのフォルダが自動で見つからないときは、フォルダを選ぶ画面が出ます。
-   gundam.exe が入っているフォルダ(通常は C:\G-TACT)を選んでください。
+   gundam.exe が入っているフォルダを選んでください(01版の既定は
+   C:\Program Files\BANDAI\GundamTactics。C:\G-TACT はセーブデータの保存先です)。
    ゲームのフォルダを install.bat の上にドラッグ&ドロップしても指定できます。
 6. 「よろしいですか? (Y/N)」と出たら Y を入力して Enter を押します。
 7. 「完了しました」と表示されたら終わりです。何かキーを押して画面を閉じます。
@@ -48,14 +53,44 @@ Windows 11 互換パッチ v1.1.0
 
 ※ ゲームを C:\Program Files などに入れている場合は、途中で「このアプリが
   デバイスに変更を加えることを許可しますか?」と出ます。「はい」を選んでください。
-※ 以前のバージョン(v1.0.x)のパッチを当てている場合も、そのまま同じ手順で
+※ 以前のバージョン(v1.0.x / v1.1.0)のパッチを当てている場合も、そのまま同じ手順で
   上書きできます。先に元に戻す必要はありません。
+
+
+■ 96版(1996年のオリジナル版)の場合(v1.2.0 から)
+96版はゲームをパソコンにコピーせず CD から起動する方式なので、このパッチが
+CD の中身をフォルダへコピーしてから当てます。QuickTime も CD の qt32.exe から
+取り出してゲームのフォルダに置くので、QuickTime をインストールする必要はありません
+(Windows には何もインストールしません)。
+1. ゲームの CD をドライブに入れます(CD の自動再生の画面は閉じてかまいません)。
+   CD の ISO イメージを持っている場合は、ダブルクリックしてマウントしても使えます。
+2. 上の「■ パッチの当て方」の 1〜4 と同じように install.bat を実行します。
+3. 「96版のディスクが見つかりました」と表示され、ゲームをコピーする場所を選ぶ
+   画面が出ます。好きな場所を選ぶと、その中に「GundamTactics96」フォルダを作って
+   コピーします(何も選ばずに閉じると C:\GundamTactics96 になります)。
+   - CD が見つからないときはフォルダを選ぶ画面が出るので、CD のドライブを選びます。
+   - セーブデータは今までどおり C:\G-TACT に保存されます(コピー先には入りません)。
+     C:\G-TACT はコピー先に選ばないでください。
+4. 「コピー先のフォルダ: ...」と表示されたら Y を入力して Enter を押します。
+   コピーには数分かかることがあります。
+5. 「完了しました」と表示されたら、コピー先のフォルダ(既定は C:\GundamTactics96)の
+   gundam.exe を起動してください。起動に CD は不要です。96版をインストールしたときにできたスタートメニューの
+   ショートカットは CD の gundam.exe を指しているので使わないでください。
+※ 96版の setup.exe や qt32.exe(QuickTime のインストール)は実行しなくてかまいません。
+※ 01版もインストールしてある場合は「1 = このフォルダにパッチを当てる /
+  2 = 96版のディスクからコピー」と聞かれるので 2 を選びます。CD のドライブを
+  install.bat の上にドラッグ&ドロップしても 96版を指定できます。
 
 
 ■ パッチを外す(元に戻す)
 1. ゲームを終了しておきます。
 2. 「uninstall.bat」をダブルクリックし、同じように Y を入力します。
+   (01版と96版の両方にパッチを当てている場合は、外したいほうのゲームの
+    フォルダを uninstall.bat の上にドラッグ&ドロップしてください)
    ゲームはパッチを当てる前の状態に戻ります。
+   (96版の場合、CD からコピーしたゲームのフォルダはそのまま残ります。
+    不要ならフォルダごと削除してかまいません。セーブデータは C:\G-TACT にあるので
+    消えません)
 
 
 ■ 画面の大きさ(v1.1.0 から)
@@ -85,7 +120,7 @@ Windows 11 互換パッチ v1.1.0
   - とても長いパスのフォルダ(目安: フォルダのパスが半角 230 文字、
     全角 115 文字を超えるもの)
   - 韓国語や絵文字など、日本語の Windows で使えない文字を含む名前のフォルダ
-  その場合は C:\G-TACT のような短いフォルダへゲームのフォルダごと移してから、
+  その場合は C:\GundamTactics のような短いフォルダへゲームのフォルダごと移してから、
   もう一度 install.bat を実行してください。
 - パッチを当てた後にゲームのフォルダを移動するときは、フォルダの中身を
   まるごと移してください(パッチが作った gundam.exe.orig・QTIM32R.DLL・
@@ -123,6 +158,16 @@ Technical notes (English)
 
 What is fixed
 -------------
+- 1996 original edition (v1.2.0): its gundam.exe is byte-identical to the
+  2001 reissue, but its setup runs the game from the CD and installs
+  QuickTime 2.x system-wide with qt32.exe. patch_files\import96.ps1 copies
+  the disc (without setup.exe, qt32.exe, autorun.inf) into a GundamTactics96
+  folder under the location picked in a folder dialog (C:\GundamTactics96
+  when none is picked or with -Yes; -GameDir sets it directly; C:\G-TACT
+  stays the save folder) with a SHA256 check per file, and expands the 14 QuickTime files
+  the reissue ships next to gundam.exe from the SZDD (compress.exe) blocks
+  inside qt32.exe, checked against the reissue hashes. Nothing is installed
+  into Windows; apply.ps1 then patches the copy as usual.
 - Startup: bypasses the legacy 16-bit-color (16bpp) check.
 - Audio: restores BGM playback from Sound\*.MID and waveOut SE playback,
   including the WAVEHDR lifetime and MIDI polling fixes.
@@ -232,10 +277,13 @@ Apply
 Double-click `install.bat` (see the Japanese guide above), or run the engine
 directly from this package directory:
 
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\patch_files\apply.ps1 -InstallPath 'C:\G-TACT'
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\patch_files\apply.ps1 -InstallPath 'C:\GundamTactics'
 
 `install.bat` finds the game folder automatically (the package folder or its
-parent, then C:\G-TACT, then a folder dialog), asks for confirmation, and
+parent, then C:\Program Files\BANDAI\GundamTactics (the 2001 reissue's
+default), C:\G-TACT and C:\GundamTactics96, then a 1996 disc in a CD-ROM
+drive, then a folder dialog; C:\G-TACT is the save folder of both
+editions), asks for confirmation, and
 requests administrator rights only when the folder is not writable. The
 engine strips stray quotes and trailing backslashes from -InstallPath. The
 package's own files are kept in `patch_files\`, so extracting the ZIP inside
@@ -246,7 +294,8 @@ the game folder never overwrites the game's QTIM32.DLL/CMGR32.DLL. The script ve
   script refuses to overwrite it. A failed transaction restores all files,
   registry state, and the sidecar.
 
-Updating from v1.0.2-v1.0.16: run the new apply.ps1 on the patched folder.
+Updating from v1.0.2-v1.0.16 or v1.1.0: run the new apply.ps1 on the
+patched folder.
 It rebuilds gundam.exe from the verified `gundam.exe.orig`; no revert is
 needed first. A QTIM32.DLL proxy from v1.0.10-v1.0.16 is replaced in place
 (QTIM32R.DLL must still be the verified original runtime). To move the game
@@ -257,7 +306,7 @@ Revert
 ------
 With the game closed, double-click `uninstall.bat`, or run:
 
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\patch_files\revert.ps1 -InstallPath 'C:\G-TACT'
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\patch_files\revert.ps1 -InstallPath 'C:\GundamTactics'
 
 Revert restores the original executable, QTIM32.DLL, and CMGR32.DLL, verifies
 all three hashes, removes the temporary QTIM32R.DLL and CMGR32R.DLL runtime
@@ -324,8 +373,9 @@ Release CMGR32.dll companion proxy:
 Distribution contents
 ---------------------
 install.bat, uninstall.bat, README.txt, CHANGELOG.txt, checksums.txt, and
-patch_files\ (install.ps1, apply.ps1, revert.ps1, QTIM32.dll, CMGR32.dll). Original game files, patched executables, and MOV assets
-are intentionally excluded.
+patch_files\ (install.ps1, apply.ps1, revert.ps1, import96.ps1, QTIM32.dll,
+CMGR32.dll). Original game files, patched executables, and MOV assets are
+intentionally excluded.
 
 Disclaimer
 ----------

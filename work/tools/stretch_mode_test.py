@@ -18,7 +18,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SOURCE = REPO / "source_exe" / "Bmp" / "HERBOR" / "MUSA.DOC"
+SOURCE = REPO / "source_exe_01" / "Bmp" / "HERBOR" / "MUSA.DOC"
 BLACKONWHITE, COLORONCOLOR = 1, 3
 gdi32 = ctypes.WinDLL("gdi32")
 user32 = ctypes.WinDLL("user32")

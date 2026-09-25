@@ -11,7 +11,7 @@ usage: render_map.py BMP_NO MAP_NO OUT [SCALE]"""
 import os, sys
 from PIL import Image
 
-GAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'source_exe')
+GAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'source_exe_01')
 
 
 def render(bmp_no, map_no):

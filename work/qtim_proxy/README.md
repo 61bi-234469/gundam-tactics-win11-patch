@@ -157,7 +157,7 @@ trace together:
 $env:QTIM_COMPAT_TRACE = "1"
 $env:QTIM_COMPAT_SELFTEST = "1"
 $env:QTIM_MCI_TRACE = "1"
-python .\work\tools\verify_launch.py --game-dir .\run\GT --wait-seconds 15 --capture window --result work\analysis\v1011_launch_verify_window.json
+python .\work\tools\verify_launch.py --game-dir .\run\GT01 --wait-seconds 15 --capture window --result work\analysis\v1011_launch_verify_window.json
 ```
 
 The equivalent INI configuration is:
@@ -203,8 +203,8 @@ Build and deploy:
 
 ```powershell
 python .\work\qtim_proxy\build.py
-python .\work\qtim_proxy\deploy.py --game-dir .\run\GT
-python .\work\tools\verify_launch.py --game-dir .\run\GT --wait-seconds 8
+python .\work\qtim_proxy\deploy.py --game-dir .\run\GT01
+python .\work\tools\verify_launch.py --game-dir .\run\GT01 --wait-seconds 8
 ```
 
 Deployment backs up both stock DLLs as `QTIM32R.DLL` and `CMGR32R.DLL` and

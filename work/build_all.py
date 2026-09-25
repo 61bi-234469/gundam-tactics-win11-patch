@@ -1,4 +1,4 @@
-"""Build the v1.1.0 executable, proxies, release package, ZIP, and release tests.
+"""Build the v1.2.0 executable, proxies, release package, ZIP, and release tests.
 
 The pipeline is intentionally linear and reproducible:
 
@@ -6,7 +6,7 @@ The pipeline is intentionally linear and reproducible:
     -> release staging/allowlist/checksums -> deterministic ZIP -> atomic publish
     -> ZIP-extraction release-cycle test -> runtime executable update
 
-``source_exe`` and ``source_iso`` are never written.  The runtime executable is
+``source_exe_01`` and ``source_iso_01`` are never written.  The runtime executable is
 updated only after the proxy has built successfully and the generated release
 has passed its ZIP-extraction test (unless ``--skip-release-test`` is supplied).
 """
@@ -45,7 +45,7 @@ PROXY_DLL = REPO_ROOT / "work" / "qtim_proxy" / "QTIM32.dll"
 CMGR_PROXY_DLL = REPO_ROOT / "work" / "qtim_proxy" / "CMGR32.dll"
 RELEASE_PARENT = REPO_ROOT / "release"
 RELEASE_DIR = RELEASE_PARENT / "GundamTactics_Win11Patch"
-RELEASE_ZIP = RELEASE_PARENT / "GundamTactics_Win11Patch_v1.1.0.zip"
+RELEASE_ZIP = RELEASE_PARENT / "GundamTactics_Win11Patch_v1.2.0.zip"
 RELEASE_ZIP_CHECKSUMS = RELEASE_PARENT / "checksums_zip.txt"
 RELEASE_TEST = REPO_ROOT / "work" / "tools" / "test_release_cycle.ps1"
 PACKAGE_ENTRIES = (
@@ -56,6 +56,7 @@ PACKAGE_ENTRIES = (
     "patch_files/install.ps1",
     "patch_files/apply.ps1",
     "patch_files/revert.ps1",
+    "patch_files/import96.ps1",
     "patch_files/QTIM32.dll",
     "patch_files/CMGR32.dll",
     "checksums.txt",
@@ -73,6 +74,7 @@ TEMPLATE_BINARY_ENTRIES = (
     "install.bat",
     "uninstall.bat",
     "patch_files/install.ps1",
+    "patch_files/import96.ps1",
 )
 
 
@@ -198,7 +200,7 @@ def replace_proxy_hashes(data: bytes, proxy_hash: str, cmgr_proxy_hash: str, nam
 
 def write_package_checksums(package_dir: Path) -> None:
     lines = [
-        "# SHA256 for the v1.1.0 distribution files.",
+        "# SHA256 for the v1.2.0 distribution files.",
         "# The original game files and patched executable are intentionally excluded.",
     ]
     for name in CHECKSUM_ENTRIES:
@@ -264,7 +266,7 @@ def build_release(
     zip_checksum_stage = stage_root / RELEASE_ZIP_CHECKSUMS.name
     zip_checksum_stage.write_bytes(
         (
-            "# SHA256 for the v1.1.0 release archive.\r\n"
+            "# SHA256 for the v1.2.0 release archive.\r\n"
             f"{sha256(zip_stage).upper()}  {RELEASE_ZIP.name}\r\n"
         ).encode("utf-8")
     )
@@ -366,13 +368,13 @@ def main() -> int:
     parser.add_argument(
         "--source",
         type=Path,
-        default=REPO_ROOT / "source_exe" / "gundam.exe",
+        default=REPO_ROOT / "source_exe_01" / "gundam.exe",
         help="read-only source executable",
     )
     parser.add_argument(
         "--game-dir",
         type=Path,
-        default=REPO_ROOT / "run" / "GT",
+        default=REPO_ROOT / "run" / "GT01",
         help="verification game directory receiving gundam.exe",
     )
     parser.add_argument(

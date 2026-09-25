@@ -116,7 +116,7 @@ def read_target_locals(hproc, eip, esp):
     }
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--game-dir", default=os.path.join(os.path.dirname(__file__), "..", "..", "run", "GT"))
+ap.add_argument("--game-dir", default=os.path.join(os.path.dirname(__file__), "..", "..", "run", "GT01"))
 ap.add_argument("--exe", default="gundam.exe",
                 help="executable filename inside --game-dir (for A/B copies such as gundam_ng.exe)")
 ap.add_argument("--steps", default="wait:5,click:0.5,0.5,wait:3,click:0.5,0.58,wait:1.5,click:0.5,0.58,wait:4")

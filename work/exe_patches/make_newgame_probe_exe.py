@@ -2,7 +2,7 @@
 
 This is diagnostic only and is not part of the Phase 4 patch.  It patches the
 Openmovi message-time gate and the already-known title-menu gate in a copy of
-run/GT/gundam.exe, with exact before-byte checks.  source_exe/ is never used as
+run/GT01/gundam.exe, with exact before-byte checks.  source_exe_01/ is never used as
 an output and is never overwritten.
 """
 
@@ -39,8 +39,8 @@ def va_to_file_offset(data: bytes, va: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", type=Path, default=Path("run/GT/gundam.exe"))
-    ap.add_argument("--dest", type=Path, default=Path("run/GT/gundam_newgame_probe.exe"))
+    ap.add_argument("--source", type=Path, default=Path("run/GT01/gundam.exe"))
+    ap.add_argument("--dest", type=Path, default=Path("run/GT01/gundam_newgame_probe.exe"))
     args = ap.parse_args()
     source = args.source.resolve()
     dest = args.dest.resolve()

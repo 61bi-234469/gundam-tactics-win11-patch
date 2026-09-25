@@ -1,6 +1,6 @@
 param(
     [string]$GhidraRoot = $env:GHIDRA_INSTALL_DIR,
-    [string]$Executable = (Join-Path $PSScriptRoot '..\..\source_exe\gundam.exe'),
+    [string]$Executable = (Join-Path $PSScriptRoot '..\..\source_exe_01\gundam.exe'),
     [string]$ProjectDirectory = (Join-Path $PSScriptRoot '..\analysis\ghidra_newgame_stall'),
     [string]$ProjectName = 'GundamTacticsNewGameStall'
 )

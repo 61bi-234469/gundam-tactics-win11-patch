@@ -191,7 +191,7 @@ def analyze(exe: Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--exe", type=Path, default=Path("source_exe/gundam.exe"))
+    parser.add_argument("--exe", type=Path, default=Path("source_exe_01/gundam.exe"))
     parser.add_argument("--output", type=Path,
                         default=Path("work/analysis/startup_import_xrefs.json"))
     args = parser.parse_args()

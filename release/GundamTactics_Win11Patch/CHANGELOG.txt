@@ -1,6 +1,39 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.2.0 - 2026-09-25
+--------------------
+- The 1996 original edition is supported. Its setup.exe copies nothing but
+  an icon and readme into C:\G-TACT (the save folder, Gundam.ini DataDir)
+  and runs the game from the CD, and qt32.exe installs QuickTime 2.x into
+  the Windows folders. Its gundam.exe is byte-identical to the 2001
+  reissue, and so are all game data except three title/logo bitmaps.
+- install.bat finds a 1996 disc (a CD-ROM drive, including a mounted ISO,
+  whose root holds gundam.exe and qt32.exe) when no installed game is
+  found, or takes it from the folder dialog, a dropped folder, or
+  -DiscDir. A folder dialog asks where to put the game and a
+  GundamTactics96 folder is created there (C:\GundamTactics96 when the
+  dialog is closed or with -Yes; -GameDir sets the folder directly).
+  C:\G-TACT is left to the saves. The new import96.ps1 copies the disc
+  there with a SHA256 check of every file, clears the CD read-only
+  attribute, and expands the 14 QuickTime files the reissue ships next to
+  gundam.exe (QTIM32.DLL, CMGR32.DLL, MCIQTENU.Q32, 11 codecs) from the
+  SZDD blocks inside qt32.exe, each checked against the reissue hash.
+  Nothing is installed into Windows. Then apply.ps1 runs as before.
+- The copy is staged in a hidden folder next to the game and moved in with
+  gundam.exe last. An existing file with identical content (the icon and
+  readme from the 1996 setup) is kept, saves are not touched, and any other
+  name clash is refused before anything is written. If the copy or the
+  following apply fails, everything this run created is removed again.
+- install.bat also finds the 2001 reissue in its setup's default folder,
+  C:\Program Files\BANDAI\GundamTactics (and under Program Files (x86)),
+  before the old C:\G-TACT check. C:\G-TACT is the save folder (Gundam.ini
+  DataDir) of both editions; README and error messages no longer suggest
+  it as a game folder.
+- apply.ps1, revert.ps1, gundam.exe patch bytes and both proxies are
+  unchanged from v1.1.0 (only the version strings and the example folder
+  in two apply.ps1 error messages).
+
 v1.1.0 - 2026-09-25
 --------------------
 - Window scaling. The game window opens at the largest whole multiple of

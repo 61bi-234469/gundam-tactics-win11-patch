@@ -18,7 +18,7 @@ import java.util.Set;
  * New Game stall investigation.
  *
  * This script deliberately emits text only.  It imports the pristine executable
- * in a throw-away headless project and does not modify source_exe/.
+ * in a throw-away headless project and does not modify source_exe_01/.
  */
 public class NewGameStallAnalysis extends GhidraScript {
     private static final long TARGET = 0x00403260L;
