@@ -50,6 +50,7 @@ Windows 11 上で遊べるようにする **配布可能な非公式互換パッ
 | `work/tools/` | 検証・解析ツール(起動検証、デスクトップキャプチャ、MOV 棚卸し、Ghidra 実行スクリプト等) | 自由 |
 | `work/analysis/ghidra_scripts/` | 解析に使った Ghidra スクリプト(その他の解析出力は git 管理外) | 自由 |
 | `release/GundamTactics_Win11Patch/` | 配布パッケージのテンプレート(インストーラー・README・CHANGELOG) | リリース時 |
+| `guide/index.html` | 攻略データのページ(生成物。GitHub Pages で公開。直接編集しない) | 生成時 |
 
 ## ビルド・検証
 

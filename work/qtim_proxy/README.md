@@ -79,8 +79,9 @@ python .\work\tools\build_movdec.py
 ```
 
 The CLI writes one BMP per frame and a `manifest.json`. The Phase 2 validation
-set compares all BMP bytes against the read-only historical `MovieCache` and
-currently passes 216/216 frames across five SMC movies.
+set compared all BMP bytes against a read-only historical `MovieCache` (frames
+rendered by the original QuickTime, kept as a private archive outside this
+repository) and passed 216/216 frames across five SMC movies.
 
 The three `cvid` movies remain on the original QuickTime controller path;
 native Cinepak decoding is not included in this phase. If a proxy-side cache
