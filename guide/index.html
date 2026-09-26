@@ -76,6 +76,8 @@ td.name small{display:block;font-weight:400;color:var(--muted);font-family:var(-
 tr:last-child td{border-bottom:0}
 .num{font-family:var(--mono)}
 .hi{font-weight:700}
+.rowbtn{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+tr.sel td{background:var(--accent-soft)}
 .pill{display:inline-block;font-size:11px;line-height:1;padding:4px 7px;border-radius:99px;font-family:var(--body);font-weight:700;white-space:nowrap}
 .pill.beam{background:var(--accent-soft);color:var(--accent)}
 .pill.solid{background:var(--line-soft);color:var(--muted)}
@@ -297,7 +299,7 @@ h2 .no{font-family:var(--mono);font-size:18px;color:var(--accent);min-width:1.4e
       </ul>
     </div>
     <div class="tbl"><table>
-      <thead><tr><th>成長型</th><th>操縦</th><th>遠隔攻撃</th><th>回避</th><th>スタミナ</th></tr></thead>
+      <thead><tr><th>成長型</th><th>操縦</th><th>射撃</th><th>回避</th><th>スタミナ</th></tr></thead>
       <tbody id="growth"></tbody>
     </table></div>
   </div>
@@ -459,16 +461,19 @@ h2 .no{font-family:var(--mono);font-size:18px;color:var(--accent);min-width:1.4e
     </div>
   </div>
   <div class="rule">
-    <h3>ルート別の功績と新艦配備（理論上の最大）</h3>
-    <p class="sub">各ミッションで敵艦と敵ユニットを増援まで含めて全滅させ、自軍の損失がない場合の得点です。新艦は、基地に寄港するミッションの出撃前に、それまでの功績で1段階ずつ判定されます。実際には増援が来る前に戦闘が終わることもあるので、上限の目安として見てください。</p>
+    <h3>ルート別の進行（理論上の最大）</h3>
+    <p class="sub">各ミッションで敵艦と敵ユニットを増援まで含めて全滅させ、自軍の損失がない場合の値です。新艦配備と<a href="#supply">ユニット補充</a>は、どちらも基地に寄港するミッションの出撃前に判定されます。新艦は1回に1段階ずつです。功績は累計され続けますが、補充ポイントは補充のたびに0に戻ります。ユニットの上限（12機）は考慮していないため、実際に補充される数はこの表以下になります。実際には増援が来る前に戦闘が終わることもあるので、上限の目安として見てください。</p>
     <div class="tbl"><table id="route-table"></table></div>
+    <p class="sub">ルートを選ぶと（上の表のルートをクリックしても選べます）、ミッションごとの経過を表示します。</p>
+    <div class="controls" id="route-detail-box"><label for="route-sel">ルート<select id="route-sel"></select></label></div>
+    <div class="tbl"><table id="route-detail"></table></div>
   </div>
   <p class="sub">今の功績と補充ポイントは「<a href="#save">17 セーブデータビューア</a>」で確認できます。</p>
 </section>
 
 <section id="supply">
   <h2><span class="no">9</span>ユニット補充 <span class="tag">SUPPLY</span></h2>
-  <p>補充されるユニットはプレイヤーが選ぶのではなく、ミッションごとの候補から<b>補充ポイントに応じて自動で決まります</b>。ここでは、その決まり方を再現して、ポイントごとの結果と、ルートごとの理論上の最大を計算します。</p>
+  <p>補充されるユニットはプレイヤーが選ぶのではなく、ミッションごとの候補から<b>補充ポイントに応じて自動で決まります</b>。ここでは、その決まり方を再現して、ポイントごとの結果を計算します。ルートごとの理論上の最大は「<a href="#campaign">8 キャンペーン進行</a>」のルート別の進行にまとめています。</p>
   <div class="rule">
     <ul>
       <li>補充ポイントは戦闘の得点（功績と同じ値）が貯まったものです。</li>
@@ -504,12 +509,6 @@ h2 .no{font-family:var(--mono);font-size:18px;color:var(--accent);min-width:1.4e
     </div>
     <div class="readout" id="sp-out"></div>
     <p class="sub" id="sp-note"></p>
-  </div>
-  <div class="rule">
-    <h3>ルート別の補充（理論上の最大）</h3>
-    <p class="sub">各ミッションで敵を増援まで全滅させ、自軍の損失がない場合のポイントです。ユニットの上限（12機）は考慮していないため、実際に補充される数はこの表以下になります。</p>
-    <div class="controls"><label for="sp-route">ルート<select id="sp-route"></select></label></div>
-    <div class="tbl"><table id="sp-route-table"></table></div>
   </div>
 </section>
 
@@ -769,7 +768,7 @@ flowchart TD
     <ul>
       <li>セーブファイルの場所は、Windows フォルダの <code>Gundam.ini</code> の <code>[Gundam]</code> セクション <code>DataDir=</code> に書かれたフォルダです（通常は <code>C:\G-TACT\</code>）。</li>
       <li>ファイル名は <code>SFD1</code>〜<code>SFD5</code>（拡張子なし）で、ロード画面のスロット1〜5に対応します。</li>
-      <li>セーブされるのは、部隊の状態（次のミッション、陣営、功績、補充ポイント、旗艦、積んでいるユニット、乗艦パイロット）と、自軍パイロットの能力（操縦・遠隔攻撃・回避・スタミナ・EXP・状態）です。NT LEVEL・SPEC・成長型は保存されず、毎回ゲームの初期値に戻ります。</li>
+      <li>セーブされるのは、部隊の状態（次のミッション、陣営、功績、補充ポイント、旗艦、積んでいるユニット、乗艦パイロット）と、自軍パイロットの能力（操縦・射撃・回避・スタミナ・EXP・状態）です。NT LEVEL・SPEC・成長型は保存されず、毎回ゲームの初期値に戻ります。</li>
     </ul>
   </div>
   <div class="panel" id="save-drop">
@@ -907,7 +906,7 @@ DATA.missions.forEach(m=>{
   m.recruits.forEach(n=>{(joins[n]=joins[n]||[]).push(String(m.id).padStart(3,"0"))});
   Object.values(m.enemy).forEach(p=>p&&p.pilots.forEach(x=>{const n=x.replace(/\(.*$/,"");(enemyOf[n]=enemyOf[n]||[]).push(String(m.id).padStart(3,"0"))}));
 });
-const PCOLS=[["n","名前"],["s","陣営"],["op","操縦"],["sh","遠隔攻撃"],["ev","回避"],["st","スタミナ"],["nt","NT"],["spec","SPEC"],["gr","成長型"],["exp","EXP"],["join","加入"],["enemy","敵として登場"]];
+const PCOLS=[["n","名前"],["s","陣営"],["op","操縦"],["sh","射撃"],["ev","回避"],["st","スタミナ"],["nt","NT"],["spec","SPEC"],["gr","成長型"],["exp","EXP"],["join","加入"],["enemy","敵として登場"]];
 let psort={k:null,dir:-1};
 function pilotTable(){
   const fs=document.getElementById("f-side").value, fk=document.getElementById("f-kind").value, q=document.getElementById("f-q").value.trim();
@@ -920,7 +919,7 @@ function pilotTable(){
     h+=`<tr><td class="name l">${side(p.s)}${esc(p.n)}</td><td class="l">${p.s}</td>`+
       `<td class="num">${p.op}${rank(p.op,20)}</td><td class="num">${p.sh}${rank(p.sh,20)}</td><td class="num">${p.ev}${rank(p.ev,20)}</td>`+
       `<td class="num">${p.st}</td><td class="num">${p.nt}${rank(p.nt,4)}</td><td class="l">${p.spec}</td>`+
-      `<td class="num" title="操縦${g[0]}% 遠隔攻撃${g[1]}% 回避${g[2]}% スタミナ${g[3]}%">${p.gr}</td>`+
+      `<td class="num" title="操縦${g[0]}% 射撃${g[1]}% 回避${g[2]}% スタミナ${g[3]}%">${p.gr}</td>`+
       `<td class="num">${p.exp} <span class="sub">${sk}</span></td><td class="l">${(joins[p.n]||[]).join(", ")||"—"}</td><td class="l">${(enemyOf[p.n]||[]).join(", ")||"—"}</td></tr>`;
   }
   document.getElementById("pilot-table").innerHTML=h+"</tbody>";
@@ -1098,7 +1097,7 @@ function sim(){
 }
 
 /* ---- score routes ---- */
-const SHIPLV={"連邦":[["サラミス",0],["マゼラン",250],["ペガサス",600]],"ジオン":[["ムサイ",0],["ムサイ後期型",150],["ザンジバル",350],["チベ",600]]};
+const SHIPLV={"連邦":[["サラミス",0,4],["マゼラン",250,6],["ペガサス",600,8]],"ジオン":[["ムサイ",0,3],["ムサイ後期型",150,4],["ザンジバル",350,6],["チベ",600,8]]};  // [name, merit, unit capacity]
 function maxScore(m){
   let s=m.bonus;
   for(const p of Object.values(m.enemy)){ if(!p) continue;
@@ -1120,17 +1119,30 @@ function routes(){
     };
     walk(start,[]);
   }
-  let h=`<thead><tr><th class="l">ルート</th><th>ミッション数</th><th>最大功績</th><th class="l">新艦配備（最短）</th></tr></thead><tbody>`;
-  for(const r of out){
-    let score=0, lv=0; const ups=[];
-    const lvs=SHIPLV[r.side];
-    r.path.forEach((m,i)=>{
-      if(i>0 && m.newShip && lv<lvs.length-1 && score>=lvs[lv+1][1]){lv++;ups.push(`${MID(m.id)}で${lvs[lv][0]}`);}
-      if(!m.ending) score+=maxScore(m);  // the final mission shows no score screen
-    });
-    h+=`<tr><td class="l">${side(r.side)}<span class="num">${r.path.map(m=>MID(m.id)).join("→")}</span></td><td class="num">${r.path.length}</td><td class="num">${score}</td><td class="l">${ups.join("、")||"なし"}</td></tr>`;
-  }
+  ROUTES.forEach(r=>r.steps=simRoute(r));
+  let h=`<thead><tr><th class="l">ルート</th><th>ミッション数</th><th>最大功績</th><th class="l">新艦配備</th><th>補充されるユニット数</th></tr></thead><tbody>`;
+  ROUTES.forEach((r,i)=>{
+    const last=r.steps[r.steps.length-1], lvs=SHIPLV[r.side];
+    const ups=r.steps.filter(x=>x.up).map(x=>`${MID(x.m.id)}で${lvs[x.lv][0]}`);
+    const units=r.steps.reduce((n,x)=>n+(x.supply?x.supply.bought.length:0),0);
+    h+=`<tr data-route="${i}"><td class="l">${side(r.side)}<button type="button" class="rowbtn num" data-route="${i}">${r.path.map(m=>MID(m.id)).join("→")}</button></td><td class="num">${r.path.length}</td><td class="num">${last.merit+last.gain}</td><td class="l">${ups.join("、")||"なし"}</td><td class="num">${units}</td></tr>`;
+  });
   simEl("route-table").innerHTML=h+"</tbody>";
+}
+/* One pass per route: merit keeps accumulating, supply points reset at each supply.
+   Both the new ship and the supply are judged before sortie at a base mission. */
+function simRoute(r){
+  const lvs=SHIPLV[r.side], steps=[];
+  let merit=0, pts=0, lv=0;
+  r.path.forEach((m,i)=>{
+    let up=false, supply=null;
+    if(i>0 && m.newShip && lv<lvs.length-1 && merit>=lvs[lv+1][1]){lv++;up=true;}
+    if(m.newShip && m.supplyTypes.length) supply=greedy(m.supplyTypes,pts,0);
+    const gain=m.ending?0:m.maxScore;  // the final mission shows no score screen
+    steps.push({m,merit,pts,lv,up,supply,gain});
+    merit+=gain; pts=(supply?0:pts)+gain;
+  });
+  return steps;
 }
 function missionMax(){ DATA.missions.forEach(m=>m.maxScore=maxScore(m)); }
 
@@ -1162,20 +1174,31 @@ function fillSupply(){
   simEl("sp-stock").value=3;
   ["sp-mission","sp-stock"].forEach(id=>simEl(id).addEventListener("change",supplyCalc));
   simEl("sp-points").addEventListener("input",supplyCalc);
-  ROUTES.forEach((r,i)=>{const o=document.createElement("option");o.value=i;o.textContent=`${r.side} ${r.path.map(m=>MID(m.id)).join("→")}`;simEl("sp-route").appendChild(o)});
-  simEl("sp-route").addEventListener("change",supplyRoute);
-  supplyCalc(); supplyRoute();
+  supplyCalc();
 }
-function supplyRoute(){
-  const r=ROUTES[+simEl("sp-route").value];
-  let pts=0, h=`<thead><tr><th>ミッション</th><th class="l">内容</th><th>出撃前のポイント</th><th class="l">補充されるユニット（理論上の最大）</th><th>捨てられる</th></tr></thead><tbody>`;
-  r.path.forEach((m,i)=>{
-    let cell="—", waste="";
-    if(m.newShip&&m.supplyTypes.length){ const g=greedy(m.supplyTypes,pts,0); cell=summarize(g.bought); waste=g.waste; h+=`<tr><td class="num">${MID(m.id)}</td><td class="l">${esc(m.title)}</td><td class="num">${pts}</td><td class="l hi">${cell}</td><td class="num">${waste}</td></tr>`; pts=0; }
-    else h+=`<tr><td class="num">${MID(m.id)}</td><td class="l">${esc(m.title)}</td><td class="num">${pts}</td><td class="l">${m.newShip?"補充なし（ポイント持ち越し）":"寄港なし（ポイント持ち越し）"}</td><td></td></tr>`;
-    pts+=m.maxScore;
+function fillRouteDetail(){
+  const sel=simEl("route-sel");
+  ROUTES.forEach((r,i)=>{const o=document.createElement("option");o.value=i;o.textContent=`${r.side} ${r.path.map(m=>MID(m.id)).join("→")}`;sel.appendChild(o)});
+  sel.addEventListener("change",routeDetail);
+  simEl("route-table").addEventListener("click",e=>{
+    const b=e.target.closest("button[data-route]"); if(!b) return;
+    sel.value=b.dataset.route; routeDetail();
+    simEl("route-detail-box").scrollIntoView({block:"nearest",behavior:"smooth"});
   });
-  simEl("sp-route-table").innerHTML=h+"</tbody>";
+  routeDetail();
+}
+function routeDetail(){
+  const i=+simEl("route-sel").value, r=ROUTES[i], lvs=SHIPLV[r.side];
+  simEl("route-table").querySelectorAll("tr[data-route]").forEach(tr=>tr.classList.toggle("sel",+tr.dataset.route===i));
+  let h=`<thead><tr><th>ミッション</th><th class="l">内容</th><th>出撃前の功績</th><th class="l">旗艦（搭載数）</th><th>出撃前の補充ポイント</th><th class="l">補充されるユニット</th><th>捨てられる</th></tr></thead><tbody>`;
+  for(const x of r.steps){
+    const ship=`${lvs[x.lv][0]}（${lvs[x.lv][2]}）`;
+    const sup=x.supply?`<td class="l hi">${summarize(x.supply.bought)}</td><td class="num">${x.supply.waste}</td>`
+      :`<td class="l">${x.m.newShip?"補充なし（ポイント持ち越し）":"寄港なし（ポイント持ち越し）"}</td><td></td>`;
+    h+=`<tr><td class="num">${MID(x.m.id)}</td><td class="l">${esc(x.m.title)}</td><td class="num">${x.merit}</td>`+
+      `<td class="l${x.up?" hi":""}">${x.up?`新艦 ${ship}`:ship}</td><td class="num">${x.pts}</td>${sup}</tr>`;
+  }
+  simEl("route-detail").innerHTML=h+"</tbody>";
 }
 
 /* ---- quirks & bugs ---- */
@@ -1221,7 +1244,7 @@ const BUGS=[
  ["データの不整合","ミッション013の敵ムサイ（10番艦）が、プレイヤーの旗艦を「護衛」する設定になっている。艦は旗艦から15マス以内に寄って離れず、発進したユニットも旗艦のまわりにつく。","この艦が現れる700カウント以降、艦とユニットが旗艦につきまとう。","コード確認・解釈"],
  ["データの不整合","ミッション016の終了メッセージは、ソーラーレーザーのコントロール艦を撃破した前提の内容しかない。輸送艦を逃がして終わったときも同じ文面が出る。","表示だけの問題。","データ確認"],
  ["データの不整合","ミッション119の敵マゼラン（8番艦）の移動先が (90,17) でマップの外にある。到着できないため「攻撃」に切り替わらず、マップ右端付近にとどまる。","第２艦隊の離脱地点 (89,14) のそばに居座り、離脱する友軍を撃つ。","コード確認・データ確認"],
- ["データの不整合","名前のある敵エースの一部は、一般兵より能力が低い（ウェア 操縦27・遠隔攻撃16・回避19 は、ジオン兵D の30より低い）。","名前付きでも警戒のいらない敵がいる。","データ確認"],
+ ["データの不整合","名前のある敵エースの一部は、一般兵より能力が低い（ウェア 操縦27・射撃16・回避19 は、ジオン兵D の30より低い）。","名前付きでも警戒のいらない敵がいる。","データ確認"],
  ["データの不整合","ミッション005と006で、ミノフスキー粒子の配置データが同じ内容になっている。","ミッション005と006は、粒子の分布が同じ。","データ確認"],
  ["未使用データ","ミッション018（ア・バオア・クー攻略・第1連合艦隊）はどこからも行けず、艦隊データもザンジバル1隻だけの仮データ。開発用とみられるミッション選択画面の画像も残っているが、ゲーム中からは呼び出されない。各ミッションの艦隊データにある旗艦のユニット・パイロット欄も、キャンペーンではセーブデータ側が使われるため参照されない。","プレイには影響しない。","データ確認"],
  ["未使用データ","連邦の9人（シロー アマダ、ミケル、サンダース、カレン、エレドア、バニング、ベイト、モンシア、アデル）とジオンの7人（アポリー、ライデン、ガトー、シーマ、ケリィ、カリウス、アイナ）は、キャンペーンでは味方にならない。ライデンはミッション105で僚艦のパイロットとして出るだけ。","パイロット名鑑に能力値は載っているが、自分の部隊では使えない。","データ確認"],
@@ -1264,7 +1287,7 @@ function showSave(s){
   const row=p=>{const o=base(p.id); return `<tr><td class="name l">${side==="連邦"?'<span class="side fed"></span>':'<span class="side zeon"></span>'}${esc(o.n)}</td><td class="l">${STATUS[p.status]||p.status}</td>`+
     `<td class="num">${p.op}${rank(p.op,20)}${delta(p.op,o.op)}</td><td class="num">${p.sh}${rank(p.sh,20)}${delta(p.sh,o.sh)}</td><td class="num">${p.ev}${rank(p.ev,20)}${delta(p.ev,o.ev)}</td>`+
     `<td class="num">${p.st}${delta(p.st,o.st)}</td><td class="num">${o.nt}${rank(o.nt,4)}</td><td class="l">${o.spec}</td><td class="num">${p.exp} <span class="sub">${["NOVICE","OFFICER","VETERAN","ACE","TOP ACE"][Math.min(4,Math.floor(p.exp/150))]}</span></td></tr>`;};
-  const head=`<thead><tr><th class="l">名前</th><th class="l">状態</th><th>操縦</th><th>遠隔攻撃</th><th>回避</th><th>スタミナ</th><th>NT</th><th class="l">SPEC</th><th>EXP</th></tr></thead>`;
+  const head=`<thead><tr><th class="l">名前</th><th class="l">状態</th><th>操縦</th><th>射撃</th><th>回避</th><th>スタミナ</th><th>NT</th><th class="l">SPEC</th><th>EXP</th></tr></thead>`;
   const roster=s.roster.map(id=>byId[id]).filter(Boolean);
   const dead=s.pilots.filter(p=>p.status===3);
   out.innerHTML=
@@ -1403,7 +1426,7 @@ function draw(){
 sel.addEventListener("change",draw); rng.addEventListener("input",draw);
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
-missionMax(); msTable(); shipTable(); growthTable(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw();
+missionMax(); msTable(); shipTable(); growthTable(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw();
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
