@@ -6,7 +6,7 @@
 ## 目的
 
 『ガンダムタクティクス MOBILITY FLEET0079』の 01版(2001-09-19 発売の復刻版)と 96版(1996 年発売の
-オリジナル版)(いずれも Windows 95/98/Me 用)を Windows 11 上で遊べるようにする **配布可能な非公式互換パッチ** を作成・保守する。
+オリジナル版)(01版は Windows 95/98/Me 用、96版は Windows 95 用)を Windows 11 上で遊べるようにする **配布可能な非公式互換パッチ** を作成・保守する。
 
 当初の課題(いずれも対応済み。詳細は `release/GundamTactics_Win11Patch/CHANGELOG.txt`):
 
@@ -98,6 +98,10 @@
 - 01版と 96版は `gundam.exe` が同じなので、`Gundam.ini` とセーブフォルダ(`DataDir`、既定 `C:\G-TACT`)を共有する。
   `C:\G-TACT` はセーブ置き場なので、パッチはゲームのコピー先にしない(ユーザー指示、2026-09-25)。
 - 音声(Phase 1): 色深度チェック迂回、WAVEHDR 生存期間修正、MIDI ポーリング間引き。
+  間引きは 100 ms に 1 回。Win11 の MCI_STATUS(mode) は 1 回約 4.5 ms かかり(互換なし・16BitColor で計測)、
+  原本は戦闘ループ 1 ティックに `FUN_00421600` を 7 回以上呼ぶ。Win95 互換レイヤーでは sequencer の MCI_OPEN が
+  MCIERR_CANNOT_LOAD_DRIVER(266)で失敗し、BGM が鳴らずポーリングも空振りする(2026-10-02、`work/tools/mci_test/mci_status_cost.c`)。
+  パッチ前の Win95 互換でバトルカウントの早送り(画面内にユニットがいないとき)が効かない原因は未特定(MCI ポーリングではない)。
   WAV は waveOut、BGM は MCI sequencer(`Sound\*.MID`)。MIDI の長い無音尾部はプロキシの
   mciSendCommand フックで短縮コピーに差し替える(v1.0.15)。
 - ムービー: ゲームは `QTIM32.DLL` の selector ディスパッチャ経由で

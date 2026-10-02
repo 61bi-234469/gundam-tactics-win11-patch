@@ -41,7 +41,10 @@ For SMC movies that use the controller path (for example
 - selector `0x36`: on the first call starts real-time audio unless the movie
   has already switched to picture-time audio, advances a `GetTickCount`-based
   movie clock, decodes the SMC frame, and draws it with `StretchDIBits` into
-  the recorded port;
+  the recorded port (v1.2.1: after leaving `g_state_lock`, from a copy of the
+  DIB, and only when the frame, port or HWND/HDC changed, the game or the
+  original runtime drew into the scaled memory DC, or 100 ms passed; with
+  scaling off it draws on every call);
 - selector `0x2F`: acknowledges movie activation without starting audio;
 - selector `0x12`: returns the decoder duration, as in v1.0.7;
 - selector `0x06`: returns the shared controller time only when an argument is
@@ -114,7 +117,10 @@ the Windows message queue. The proxy therefore calls
 `PeekMessageA(&msg, NULL, 0, 0, PM_NOREMOVE)` at most once per 250 ms per
 thread from the fake-controller `0x36` and `GetMoviePict(0x14)` paths. The
 call is made only when the saved controller HWND belongs to the current UI
-thread, after leaving `g_state_lock`; an unknown HWND causes no probe. It
+thread, after leaving `g_state_lock`. When there is no controller (v1.2.1,
+`GetMoviePict` movies) the current thread's "Gundam" window, found with
+`EnumThreadWindows`, is used instead; with no such window there is no
+probe. It
 does not remove or dispatch messages, and is logged once as `message_pump`
 when compatibility tracing is enabled.
 
@@ -127,7 +133,12 @@ drawing (`gt_scale_get_dc`). Each acquisition does `SaveDC`, each release
 `StretchDIBits`, `PatBlt`, `SetPixel`; the runtime's `BitBlt`, `PatBlt`,
 `SetDIBitsToDevice`, `FillRect`) mark it dirty, and it is stretched onto
 the window on DC release, on the game's `PeekMessageA`/`GetMessageA`, and
-from a helper thread after 12 ms without drawing. A window subclass maps
+from a helper thread after 12 ms without drawing. When the window is not a
+whole multiple of 576x416 the stretch uses `HALFTONE` (5-7 ms); from v1.2.1
+the game thread then only copies the frame and the helper thread stretches
+it (all `HALFTONE` presents, `WM_PAINT` included, go through the helper in
+order; helper stretches are serialized and a helper retires when a newer
+one is created). A window subclass maps
 mouse `lParam` back to 576x416, repaints from the memory DC, hides resizes
 from the game (it only sees minimize and the restore after it), and toggles
 borderless fullscreen on Alt+Enter. From the movie paths above, queued

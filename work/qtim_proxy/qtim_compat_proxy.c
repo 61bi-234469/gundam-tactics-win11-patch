@@ -111,6 +111,18 @@ typedef struct ControllerMap {
     LONG dst_cy;
     int target_valid;
     int done_logged;
+    /* What was last drawn, so an unchanged frame is not redrawn on every
+     * 0x36/0x06 poll (each draw presents the whole scaled window). */
+    int drawn_valid;
+    uint32_t drawn_frame;
+    HWND drawn_hwnd;
+    HDC drawn_hdc;
+    LONG drawn_x;
+    LONG drawn_y;
+    LONG drawn_cx;
+    LONG drawn_cy;
+    LONG drawn_foreign;
+    DWORD drawn_tick;
     DWORD result_log_tick[2];
     uint32_t result_log_frame[2];
     int result_log_initialized[2];
@@ -138,6 +150,7 @@ typedef struct CompatThreadState {
     uint32_t pending_out_slot;
     int pending_close_seen;
     DWORD message_pump_last_tick;
+    HWND message_pump_game_hwnd;
     int message_pump_initialized;
 } CompatThreadState;
 
@@ -1551,6 +1564,17 @@ static int install_input_iat_hooks(void) {
  * preserving the game's normal input ordering.  Only probe from the thread
  * that owns the controller's drawing window.  Keep this outside g_state_lock:
  * PeekMessage can enter USER32/window-manager code. */
+/* EnumThreadWindows callback: the game's "Gundam" window on this thread. */
+static BOOL CALLBACK find_game_window_proc(HWND hwnd, LPARAM param) {
+    char cls[16];
+    if (GetClassNameA(hwnd, cls, sizeof(cls)) &&
+        lstrcmpA(cls, "Gundam") == 0) {
+        *(HWND *)param = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
 static void maybe_pump_messages(HWND hwnd) {
     CompatThreadState *state;
     DWORD now;
@@ -1559,9 +1583,6 @@ static void maybe_pump_messages(HWND hwnd) {
 
     /* Every frame, not throttled: a window drag should start promptly. */
     gt_scale_service_frame_input();
-    if (!hwnd) return;
-    owner_thread = GetWindowThreadProcessId(hwnd, NULL);
-    if (!owner_thread || owner_thread != GetCurrentThreadId()) return;
     state = get_thread_state();
     if (!state) return;
     now = GetTickCount();
@@ -1569,6 +1590,23 @@ static void maybe_pump_messages(HWND hwnd) {
         (DWORD)(now - state->message_pump_last_tick) < 250u) return;
     state->message_pump_initialized = 1;
     state->message_pump_last_tick = now;
+    if (!hwnd) {
+        /* GetMoviePict movies have no controller and so no target window;
+         * use the game's main window so their loops still check the queue
+         * (with scaling off nothing else does, and Windows marks the
+         * window "Not Responding" after 5 s). */
+        hwnd = state->message_pump_game_hwnd;
+        if (!hwnd || !IsWindow(hwnd) ||
+            GetWindowThreadProcessId(hwnd, NULL) != GetCurrentThreadId()) {
+            hwnd = NULL;
+            EnumThreadWindows(GetCurrentThreadId(), find_game_window_proc,
+                              (LPARAM)&hwnd);
+            state->message_pump_game_hwnd = hwnd;
+        }
+        if (!hwnd) return;
+    }
+    owner_thread = GetWindowThreadProcessId(hwnd, NULL);
+    if (!owner_thread || owner_thread != GetCurrentThreadId()) return;
     PeekMessageA(&message, NULL, 0, 0, PM_NOREMOVE);
     if (g_trace_enabled &&
         InterlockedCompareExchange(&g_message_pump_logged, 1, 0) == 0) {
@@ -3346,19 +3384,41 @@ static uint32_t controller_time_locked(const ControllerMap *controller,
     return (uint32_t)time;
 }
 
+/* An unchanged frame is redrawn at once when the game has drawn into the
+ * scaled shadow since our last draw, and at least this often otherwise. */
+enum { CONTROLLER_REDRAW_MS = 100 };
+
+/* A controller frame to draw after g_state_lock is released: drawing reaches
+ * USER/GDI (and, the first time, the game's own window procedure through the
+ * display-scale window setup), so it must not run under the state lock.  The
+ * DIB is a private copy because the controller may be released meanwhile. */
+typedef struct ControllerDraw {
+    BYTE *dib;
+    HWND hwnd;
+    HDC fallback_hdc;
+    LONG x;
+    LONG y;
+    LONG cx;
+    LONG cy;
+    int src_w;
+    int src_h;
+} ControllerDraw;
+
 static void draw_controller_frame_locked(ControllerMap *controller,
-                                         MovieMap *movie) {
+                                         MovieMap *movie,
+                                         ControllerDraw *draw) {
     const MovTrackInfo *video;
     uint32_t movie_time;
     uint32_t frame;
     int new_frame;
     HGLOBAL dib;
     BYTE *p;
-    BITMAPINFO *bmi;
-    HDC dc = NULL;
     HWND hwnd = NULL;
-    int release_dc = 0;
+    DWORD now;
+    LONG foreign = 0;
+    int scaled;
 
+    if (draw) memset(draw, 0, sizeof(*draw));
     if (!controller || !movie || !movie->decoder) return;
     video = movdec_video_info(movie->decoder);
     if (!video) return;
@@ -3375,33 +3435,56 @@ static void draw_controller_frame_locked(ControllerMap *controller,
     }
 
     controller->last_time = movie_time;
-    if (controller->last_dib) {
-        p = (BYTE *)GlobalLock(controller->last_dib);
-        if (p) {
-            bmi = (BITMAPINFO *)(void *)p;
-            if (controller->target_hwnd &&
-                IsWindow(controller->target_hwnd)) {
-                hwnd = controller->target_hwnd;
-            } else {
-                hwnd = FindWindowA(NULL, "Gundam Tactics");
-                if (hwnd) controller->target_hwnd = hwnd;
+    if (controller->last_dib && draw) {
+        if (controller->target_hwnd &&
+            IsWindow(controller->target_hwnd)) {
+            hwnd = controller->target_hwnd;
+        } else {
+            hwnd = FindWindowA(NULL, "Gundam Tactics");
+            if (hwnd) controller->target_hwnd = hwnd;
+        }
+        now = GetTickCount();
+        /* Only the scaled path knows whether the game drew over the shadow
+         * since our last draw; without scaling, redraw on every poll as
+         * before (no present is involved there). */
+        scaled = gt_scale_foreign_draws(&foreign);
+        if (!scaled || !controller->drawn_valid ||
+            controller->drawn_foreign != foreign ||
+            controller->drawn_frame != controller->last_frame ||
+            controller->drawn_hwnd != hwnd ||
+            controller->drawn_hdc != controller->target_hdc ||
+            controller->drawn_x != controller->dst_x ||
+            controller->drawn_y != controller->dst_y ||
+            controller->drawn_cx != controller->dst_cx ||
+            controller->drawn_cy != controller->dst_cy ||
+            (DWORD)(now - controller->drawn_tick) >= CONTROLLER_REDRAW_MS) {
+            SIZE_T bytes = GlobalSize(controller->last_dib);
+            p = (BYTE *)GlobalLock(controller->last_dib);
+            if (p && bytes) {
+                draw->dib = (BYTE *)HeapAlloc(GetProcessHeap(), 0, bytes);
+                if (draw->dib) {
+                    memcpy(draw->dib, p, bytes);
+                    draw->hwnd = hwnd;
+                    draw->fallback_hdc = controller->target_hdc;
+                    draw->x = controller->dst_x;
+                    draw->y = controller->dst_y;
+                    draw->cx = controller->dst_cx;
+                    draw->cy = controller->dst_cy;
+                    draw->src_w = (int)video->width;
+                    draw->src_h = (int)video->height;
+                    controller->drawn_valid = 1;
+                    controller->drawn_frame = controller->last_frame;
+                    controller->drawn_hwnd = hwnd;
+                    controller->drawn_hdc = controller->target_hdc;
+                    controller->drawn_x = controller->dst_x;
+                    controller->drawn_y = controller->dst_y;
+                    controller->drawn_cx = controller->dst_cx;
+                    controller->drawn_cy = controller->dst_cy;
+                    controller->drawn_foreign = foreign;
+                    controller->drawn_tick = now;
+                }
             }
-            if (hwnd) {
-                dc = gt_scale_get_dc(hwnd);
-                if (dc) release_dc = 1;
-            }
-            if (!dc) dc = controller->target_hdc;
-            if (dc) {
-                StretchDIBits(
-                    dc, controller->dst_x, controller->dst_y,
-                    controller->dst_cx, controller->dst_cy,
-                    0, 0, (int)video->width, (int)video->height,
-                    p + sizeof(BITMAPINFOHEADER) +
-                        256u * sizeof(RGBQUAD), bmi, DIB_RGB_COLORS,
-                    SRCCOPY);
-            }
-            GlobalUnlock(controller->last_dib);
-            if (release_dc) gt_scale_release_dc(hwnd, dc);
+            if (p) GlobalUnlock(controller->last_dib);
         }
     }
 
@@ -3413,6 +3496,29 @@ static void draw_controller_frame_locked(ControllerMap *controller,
         log_controller_line("controller_done", controller, movie_time, frame);
     }
     shared_refresh_controller(controller, movie);
+}
+
+/* Runs outside g_state_lock.  Frees the DIB copy. */
+static void execute_controller_draw(ControllerDraw *draw) {
+    HDC dc = NULL;
+    int release_dc = 0;
+    if (!draw || !draw->dib) return;
+    if (draw->hwnd) {
+        dc = gt_scale_get_dc(draw->hwnd);
+        if (dc) release_dc = 1;
+    }
+    if (!dc) dc = draw->fallback_hdc;
+    if (dc) {
+        StretchDIBits(dc, draw->x, draw->y, draw->cx, draw->cy,
+                      0, 0, draw->src_w, draw->src_h,
+                      draw->dib + sizeof(BITMAPINFOHEADER) +
+                          256u * sizeof(RGBQUAD),
+                      (BITMAPINFO *)(void *)draw->dib, DIB_RGB_COLORS,
+                      SRCCOPY);
+    }
+    if (release_dc) gt_scale_release_dc(draw->hwnd, dc);
+    HeapFree(GetProcessHeap(), 0, draw->dib);
+    draw->dib = NULL;
 }
 
 static HGLOBAL make_black_dib(unsigned width, unsigned height) {
@@ -3730,6 +3836,8 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
         int handled = 0;
         int start_audio = 0;
         MovieMap *audio_movie = NULL;
+        ControllerDraw draw;
+        memset(&draw, 0, sizeof(draw));
         EnterCriticalSection(&g_state_lock);
         ControllerMap *controller =
             find_controller_in_args(arg0, arg1, arg2, arg3);
@@ -3755,7 +3863,7 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
                         start_audio = 1;
                     audio_movie = movie;
                 }
-                draw_controller_frame_locked(controller, movie);
+                draw_controller_frame_locked(controller, movie, &draw);
                 result = controller->last_time;
                 handled = 1;
             }
@@ -3767,6 +3875,7 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
             log_controller_result(controller, sel, result_movie_handle,
                                   result_controller_handle, result);
             LeaveCriticalSection(&g_state_lock);
+            execute_controller_draw(&draw);
             if (sel == 0x36) maybe_pump_messages(pump_hwnd);
             if (start_audio) start_movie_audio(audio_movie);
             drain_audio_teardowns();
@@ -4285,6 +4394,10 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
         if (g_gdi_iat_hook_count && !restore_gdi_iat_hooks()) {
             log_text("FATAL GDI IAT hook restoration failed\n");
         }
+        /* At process exit (reserved != NULL) skip the teardown: waveOut and
+         * FreeLibrary must not run under the loader lock (WinMM can block
+         * there, hanging the exit), and the OS reclaims everything anyway. */
+        if (reserved != NULL) return TRUE;
         if (g_locks_ready) EnterCriticalSection(&g_state_lock);
         while (g_controller_count > 0)
             release_controller_at_locked(g_controller_count - 1, 0);

@@ -363,22 +363,19 @@ static int finalize_track(MovDecoder *movie, TrackState *track) {
         if (track->stsc[entry].first_chunk > chunk) return 0;
         samples_per_chunk = track->stsc[entry].samples_per_chunk;
         if ((uint64_t)sample + samples_per_chunk > sample_count) return 0;
-        for (j = 0; j < samples_per_chunk; j++) {
+        /* Running offset: raw audio packs thousands of 1-byte samples per
+         * chunk, so re-summing the prior samples was O(n^2) per chunk. */
+        {
             uint64_t offset = track->chunk_offsets[chunk - 1];
-            uint32_t k;
-            for (k = 0; k < j; k++) {
-                uint32_t prior = track->sample_size ? track->sample_size :
-                    track->sizes[sample - j + k];
-                offset += prior;
-            }
-            {
+            for (j = 0; j < samples_per_chunk; j++) {
                 uint32_t length = track->sample_size ? track->sample_size :
                     track->sizes[sample];
                 if (offset > movie->size || length > movie->size - (size_t)offset ||
                     offset > UINT32_MAX) return 0;
                 track->offsets[sample] = (uint32_t)offset;
+                offset += length;
+                sample++;
             }
-            sample++;
         }
     }
     return sample == sample_count;

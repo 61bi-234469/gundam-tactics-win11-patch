@@ -27,6 +27,11 @@ void gt_scale_detach(int process_exit);
 HDC gt_scale_get_dc(HWND hwnd);
 void gt_scale_release_dc(HWND hwnd, HDC dc);
 
+/* Returns 1 while scaling is active and stores how many times gundam.exe or
+ * the stock QuickTime DLL has drawn into the shadow (the proxy's own
+ * gt_scale_get_dc drawing is not counted).  Returns 0 when scaling is off. */
+int gt_scale_foreign_draws(LONG *count);
+
 /* For the movie loops, which do not read the message queue: dispatches
  * queued caption/border presses on the main window so the window can be
  * moved and resized during movies.  No-op unless scaling is active. */

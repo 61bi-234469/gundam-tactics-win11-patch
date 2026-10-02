@@ -294,7 +294,8 @@ try {
 
     foreach ($previous in @(
         @{ Version = "v1.0.14"; Sha256 = "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c" },
-        @{ Version = "v1.0.16"; Sha256 = "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2" }
+        @{ Version = "v1.0.16"; Sha256 = "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2" },
+        @{ Version = "v1.2.0"; Sha256 = "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489" }
     )) {
         $label = "proxyupgrade" + ($previous.Version -replace "[^0-9]", "")
         Write-Host ("--- {0} QTIM32 proxy upgrades in place; revert removes MidiLoop copies ---" -f $previous.Version)
@@ -599,7 +600,7 @@ try {
         Write-Host "--- skipped 1996 edition tests: source_iso_96\GundamTactics.iso not found ---"
     }
 
-    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14/v1.0.16 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
+    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12 upgrade, v1.0.14/v1.0.16/v1.2.0 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
 } finally {
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_AFTER_APP_COMPAT -ErrorAction SilentlyContinue
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue

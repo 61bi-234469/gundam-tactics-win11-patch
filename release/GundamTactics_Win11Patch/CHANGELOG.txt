@@ -1,6 +1,31 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.2.1 - 2026-10-03
+--------------------
+- Lighter on the game thread, fewer chances of "Not Responding". Only the
+  QTIM32 proxy changed; gundam.exe patch bytes, the CMGR32 proxy and the
+  installer behaviour are the same as v1.2.0.
+- Opening a movie no longer stalls: the SMC decoder computed each audio
+  sample offset by re-adding every earlier sample of its chunk (raw audio
+  has thousands per chunk), about 80 ms per sortie/cruise movie. All 1,199
+  movies decode to the same bytes as before.
+- Sortie/cruise movies no longer redraw and present the whole window on
+  every controller poll. A frame is redrawn when it changes, when its
+  target changes, when the game or QuickTime drew over the window, or
+  every 100 ms; drawing happens outside the proxy's internal lock.
+- With a non-integer window size (maximized, Alt+Enter fullscreen, a
+  manual resize, or filter=smooth) the smoothing stretch (5-7 ms each)
+  runs on the helper thread; the game thread only copies the frame.
+  Whole-multiple sizes present as before.
+- Battle movies that play without a controller now let Windows know the
+  game is alive every 250 ms even with scale=off, so the window is not
+  marked "Not Responding" during long movie sequences.
+- On exit the proxy no longer stops movie audio or unloads QuickTime from
+  inside DLL shutdown (Windows reclaims them), which could hang the exit.
+- apply.ps1 and revert.ps1 accept the v1.1.0/v1.2.0 QTIM32 proxy and
+  upgrade or remove it in place.
+
 v1.2.0 - 2026-09-25
 --------------------
 - The 1996 original edition is supported. Its setup.exe copies nothing but

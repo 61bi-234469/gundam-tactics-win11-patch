@@ -61,6 +61,29 @@ static int g_fullscreen;
 static LONG g_saved_style;
 static WINDOWPLACEMENT g_saved_placement;
 static volatile LONG g_stop;
+/* HALFTONE presents from the game thread go through the helper thread
+ * (g_async): g_snap is the frame handed over; each helper stretches from its
+ * own copy.  g_snap and g_wake are freed on a FreeLibrary detach, which can
+ * only happen after every helper has exited. */
+#define GAME_BYTES ((size_t)GAME_W * GAME_H * 4u)
+static void *g_snap;
+static volatile LONG g_snap_pending;
+static HANDLE g_wake;
+static volatile LONG g_async;
+/* Bumped for every helper created; only the newest helper keeps running. */
+static volatile LONG g_helper_gen;
+/* Serializes helper stretches (copy + stretch) so a retiring helper cannot
+ * land a frame after the current helper's newer one.  Only helpers take it. */
+static CRITICAL_SECTION g_helper_lock;
+
+typedef struct HelperParam {
+    HMODULE self;
+    HWND hwnd;
+    void *bits;
+    LONG gen;
+} HelperParam;
+/* Counts draws into the shadow by anyone but the proxy's own SMC drawing. */
+static volatile LONG g_foreign_draws;
 
 static void scale_log(const char *fmt, ...) {
     char buf[256];
@@ -168,20 +191,14 @@ int gt_scale_selftest(void) {
 
 /* ---- presenting ---- */
 
-static void present(HDC target) {
-    HWND hwnd = g_main;
+/* Stretches a 576x416 top-down 32bpp image onto the window (or target). */
+static void stretch_to_window(HWND hwnd, HDC target, const void *bits,
+                              RECT dst) {
     HDC dc;
     RECT client;
-    RECT dst;
-    if (!hwnd || !g_shadow || !g_lock_ready) return;
-    EnterCriticalSection(&g_present_lock);
-    InterlockedExchange(&g_dirty, 0);
-    g_last_present = GetTickCount();
-    if (GetCurrentThreadId() == g_main_thread) GdiFlush();
     dc = target ? target : GetDC(hwnd);
     if (dc && GetClientRect(hwnd, &client) && client.right > 0 &&
         client.bottom > 0) {
-        dst = g_dst;
         if (use_halftone(&dst)) {
             SetStretchBltMode(dc, HALFTONE);
             SetBrushOrgEx(dc, 0, 0, NULL);
@@ -189,7 +206,7 @@ static void present(HDC target) {
             SetStretchBltMode(dc, COLORONCOLOR);
         }
         StretchDIBits(dc, dst.left, dst.top, dst.right - dst.left,
-                      dst.bottom - dst.top, 0, 0, GAME_W, GAME_H, g_bits,
+                      dst.bottom - dst.top, 0, 0, GAME_W, GAME_H, bits,
                       &g_bmi, DIB_RGB_COLORS, SRCCOPY);
         if (dst.left > 0) PatBlt(dc, 0, 0, dst.left, client.bottom, BLACKNESS);
         if (dst.right < client.right)
@@ -202,12 +219,58 @@ static void present(HDC target) {
                    client.bottom - dst.bottom, BLACKNESS);
     }
     if (dc && !target) ReleaseDC(hwnd, dc);
+}
+
+static void present(HDC target) {
+    HWND hwnd = g_main;
+    RECT dst;
+    int on_main;
+    if (!hwnd || !g_shadow || !g_lock_ready) return;
+    on_main = GetCurrentThreadId() == g_main_thread;
+    EnterCriticalSection(&g_present_lock);
+    InterlockedExchange(&g_dirty, 0);
+    g_last_present = GetTickCount();
+    if (on_main) GdiFlush();
+    dst = g_dst;
+    if (on_main && g_async && use_halftone(&dst)) {
+        /* HALFTONE costs 5-7 ms per present: hand a snapshot of the frame
+         * to the helper thread instead of stalling the game loop.  WM_PAINT
+         * (target != NULL) goes the same way, so every HALFTONE stretch
+         * comes from the helper in order and an older frame can never land
+         * after a newer one; the helper paints the whole client area. */
+        memcpy(g_snap, g_bits, GAME_BYTES);
+        InterlockedExchange(&g_snap_pending, 1);
+        LeaveCriticalSection(&g_present_lock);
+        SetEvent(g_wake);
+        return;
+    }
+    if (g_async) {
+        /* A synchronous present while a helper exists (e.g. right after a
+         * resize from a HALFTONE size to a whole multiple): order it after
+         * any helper stretch in flight and drop a pending older snapshot.
+         * Lock order as in the helper: g_helper_lock, then g_present_lock. */
+        LeaveCriticalSection(&g_present_lock);
+        EnterCriticalSection(&g_helper_lock);
+        EnterCriticalSection(&g_present_lock);
+        InterlockedExchange(&g_snap_pending, 0);
+        stretch_to_window(hwnd, target, g_bits, g_dst);
+        LeaveCriticalSection(&g_present_lock);
+        LeaveCriticalSection(&g_helper_lock);
+        return;
+    }
+    stretch_to_window(hwnd, target, g_bits, dst);
     LeaveCriticalSection(&g_present_lock);
 }
 
-static void mark_dirty(void) {
+static void mark_dirty_own(void) {
     g_last_dirty = GetTickCount();
     InterlockedExchange(&g_dirty, 1);
+}
+
+/* For draws by gundam.exe and the stock QuickTime DLL. */
+static void mark_dirty(void) {
+    InterlockedIncrement(&g_foreign_draws);
+    mark_dirty_own();
 }
 
 static void update_dst(HWND hwnd) {
@@ -219,19 +282,80 @@ static void update_dst(HWND hwnd) {
     LeaveCriticalSection(&g_present_lock);
 }
 
+/* Copies a frame under the present lock and stretches it after releasing
+ * it, so the game thread never waits for a helper-side stretch. */
+static void helper_present_locked(HWND hwnd, void *bits, int from_snapshot) {
+    RECT dst;
+    EnterCriticalSection(&g_present_lock);
+    if (from_snapshot) {
+        if (!InterlockedExchange(&g_snap_pending, 0)) {
+            LeaveCriticalSection(&g_present_lock);
+            return;
+        }
+        memcpy(bits, g_snap, GAME_BYTES);
+    } else {
+        InterlockedExchange(&g_dirty, 0);
+        g_last_present = GetTickCount();
+        dst = g_dst;
+        if (!use_halftone(&dst)) {
+            /* The game thread presents synchronously in this mode: stay
+             * under the lock so an older frame cannot land after a newer
+             * one. */
+            stretch_to_window(hwnd, NULL, g_bits, dst);
+            LeaveCriticalSection(&g_present_lock);
+            return;
+        }
+        memcpy(bits, g_bits, GAME_BYTES);
+    }
+    dst = g_dst;
+    LeaveCriticalSection(&g_present_lock);
+    stretch_to_window(hwnd, NULL, bits, dst);
+}
+
+/* Lock order: g_helper_lock, then g_present_lock (the game thread takes
+ * g_helper_lock only for a synchronous present while a helper exists; a
+ * HALFTONE snapshot present never waits for it).  A helper whose generation
+ * is no longer current draws nothing. */
+static void helper_present(HWND hwnd, void *bits, int from_snapshot,
+                           LONG gen) {
+    EnterCriticalSection(&g_helper_lock);
+    if (g_helper_gen == gen) helper_present_locked(hwnd, bits, from_snapshot);
+    LeaveCriticalSection(&g_helper_lock);
+}
+
 static DWORD WINAPI present_thread(LPVOID param) {
-    HMODULE self = (HMODULE)param;
+    HelperParam *hp = (HelperParam *)param;
+    HMODULE self = hp->self;
+    HWND mine = hp->hwnd;
+    void *bits = hp->bits;
+    LONG gen = hp->gen;
+    HeapFree(GetProcessHeap(), 0, hp);
     while (!g_stop) {
         HWND hwnd = g_main;
         DWORD now;
-        Sleep(4);
-        if (!hwnd || !IsWindow(hwnd)) break;
-        if (!g_dirty || IsIconic(hwnd)) continue;
+        if (g_wake) WaitForSingleObject(g_wake, 4);
+        else Sleep(4);
+        /* A window adopted later gets its own helper. */
+        if (!hwnd || hwnd != mine || g_main != mine ||
+            g_helper_gen != gen || !IsWindow(hwnd))
+            break;
+        if (IsIconic(hwnd)) {
+            InterlockedExchange(&g_snap_pending, 0);
+            continue;
+        }
+        if (g_snap_pending && bits) {
+            helper_present(hwnd, bits, 1, gen);
+            continue;
+        }
+        if (!g_dirty) continue;
         now = GetTickCount();
         if ((DWORD)(now - g_last_dirty) >= IDLE_PRESENT_MS ||
-            (DWORD)(now - g_last_present) >= STALE_PRESENT_MS)
-            present(NULL);
+            (DWORD)(now - g_last_present) >= STALE_PRESENT_MS) {
+            if (bits) helper_present(hwnd, bits, 0, gen);
+            else present(NULL);
+        }
     }
+    if (bits) VirtualFree(bits, 0, MEM_RELEASE);
     if (self) FreeLibraryAndExitThread(self, 0);
     return 0;
 }
@@ -418,9 +542,39 @@ static int setup_window(HWND hwnd) {
     /* The helper thread keeps the proxy loaded until it exits. */
     if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
                            (LPCSTR)(uintptr_t)present_thread, &self)) {
-        thread = CreateThread(NULL, 0, present_thread, self, 0, NULL);
-        if (thread) CloseHandle(thread);
-        else FreeLibrary(self);
+        HelperParam *hp = (HelperParam *)HeapAlloc(GetProcessHeap(),
+                                                   HEAP_ZERO_MEMORY,
+                                                   sizeof(*hp));
+        if (!g_snap)
+            g_snap = VirtualAlloc(NULL, GAME_BYTES, MEM_COMMIT | MEM_RESERVE,
+                                  PAGE_READWRITE);
+        if (!g_wake && g_snap)
+            g_wake = CreateEventA(NULL, FALSE, FALSE, NULL);
+        void *bits = NULL;
+        thread = NULL;
+        if (hp) {
+            hp->self = self;
+            hp->hwnd = hwnd;
+            /* The helper's private copy; it frees it when it exits. */
+            if (g_snap && g_wake)
+                bits = VirtualAlloc(NULL, GAME_BYTES,
+                                    MEM_COMMIT | MEM_RESERVE,
+                                    PAGE_READWRITE);
+            hp->bits = bits;
+            hp->gen = InterlockedIncrement(&g_helper_gen);
+            /* hp belongs to the thread from here on (it frees it at once). */
+            thread = CreateThread(NULL, 0, present_thread, hp, 0, NULL);
+        }
+        /* Without a helper able to stretch snapshots, present() stays
+         * synchronous (and the helper, if any, polls every 4 ms). */
+        InterlockedExchange(&g_async, thread && bits ? 1 : 0);
+        if (thread) {
+            CloseHandle(thread);
+        } else {
+            if (bits) VirtualFree(bits, 0, MEM_RELEASE);
+            if (hp) HeapFree(GetProcessHeap(), 0, hp);
+            FreeLibrary(self);
+        }
     }
     scale_log("active\thwnd=%08X\tmultiple=%d\tclient=%dx%d\tfilter=%d",
               (unsigned)(uintptr_t)hwnd, k, GAME_W * k, GAME_H * k, g_filter);
@@ -776,6 +930,7 @@ int gt_scale_attach(const char *ini_path, HMODULE qt_module, GtScaleLogFn log) {
         return 0;
     }
     InitializeCriticalSection(&g_present_lock);
+    InitializeCriticalSection(&g_helper_lock);
     g_lock_ready = 1;
     if (!install_hooks(GetModuleHandleA(NULL), k_exe_hooks,
                        sizeof(k_exe_hooks) / sizeof(k_exe_hooks[0]), 1) ||
@@ -803,6 +958,14 @@ void gt_scale_detach(int process_exit) {
     if (!process_exit && g_main && IsWindow(g_main) && g_orig_proc &&
         GetWindowLongA(g_main, GWL_WNDPROC) == (LONG)(uintptr_t)scale_wndproc)
         SetWindowLongA(g_main, GWL_WNDPROC, (LONG)(uintptr_t)g_orig_proc);
+    if (!process_exit) {
+        /* No helper is left (each holds a module reference). */
+        g_async = 0;
+        if (g_wake) CloseHandle(g_wake);
+        g_wake = NULL;
+        if (g_snap) VirtualFree(g_snap, 0, MEM_RELEASE);
+        g_snap = NULL;
+    }
 }
 
 /* Hit-test codes whose button-down starts a window move/size loop (or the
@@ -838,9 +1001,15 @@ HDC gt_scale_get_dc(HWND hwnd) {
 
 void gt_scale_release_dc(HWND hwnd, HDC dc) {
     if (is_shadow(dc)) {
-        mark_dirty();
+        mark_dirty_own();
         release_shadow_dc();
         return;
     }
     ReleaseDC(hwnd, dc);
+}
+
+int gt_scale_foreign_draws(LONG *count) {
+    if (!g_hooks_active || !g_main || g_failed) return 0;
+    if (count) *count = g_foreign_draws;
+    return 1;
 }

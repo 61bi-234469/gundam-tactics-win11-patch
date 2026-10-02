@@ -1,5 +1,5 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.2.0
+Windows 11 互換パッチ v1.2.1
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
@@ -366,7 +366,7 @@ Previous patched gundam.exe (accepted for upgrade):
 Stock QTIM32.DLL:
   dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f
 Release QTIM32.dll proxy:
-  d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489
+  054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0
 Stock CMGR32.DLL:
   9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4
 Release CMGR32.dll companion proxy:
