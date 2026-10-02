@@ -9,22 +9,21 @@ Windows 11 互換パッチ v1.2.0
 対象: 01版 『ガンダムタクティクス MOBILITY FLEET0079 復刻版』
             (2001年9月19日発売、Windows 95/98/Me 用)
       96版 『ガンダムタクティクス MOBILITY FLEET0079』
-            (1996年発売のオリジナル版、v1.2.0 から)
+            (1996年発売のオリジナル版、Windows 95 用)
       → 96版の手順は「■ 96版(1996年のオリジナル版)の場合」を見てください。
 
 
 ■ 直ること
-- 起動時の「16ビットモードで実行してください」のエラー
-  (画面の色数を変える必要も、互換モードの設定も不要になります)
+Windows 11 で動かすと、プロパティの設定(互換モード、管理者として実行など)や
+パソコンの環境によって、次の問題が起きることがあります。このパッチを当てると、
+これらを解決できます(プロパティの設定や、画面の色数の変更は不要です)。
+- 起動時に「16ビットモードで実行してください」のエラーが出る
 - BGM・効果音が鳴らない
-- BGM が曲の終わりで止まり、長いあいだ無音になる(ループしない)
-- ゲーム画面を最小化して戻すと BGM が鳴らなくなる
-- ムービーが真っ暗になる/飛ばされる
+- ムービーが真っ暗になる、または飛ばされる
 - フェードなどで画面が上下反転する
-- ムサイのハーバー画面に縦線が出る(原作の画像データ由来)
-- クリックが効かないことがある
-- 長いフォルダ名や日本語のフォルダ名だと起動できない・NEW GAME で止まる
-- ゲーム画面が小さい(大きなウィンドウや全画面で遊べるようになります)
+- 画面内にユニットなどがいないときに、バトルカウントが早送りされない
+- 特定のハーバー画面で不自然な縦線が表示される
+また、ゲーム画面を大きなウィンドウや全画面で遊べるようになります。
 
 
 ■ 用意するもの
@@ -147,8 +146,11 @@ CD の中身をフォルダへコピーしてから当てます。QuickTime も 
 
 
 ■ 注意事項
-正規に入手したゲームでのみお使いください。このパッチは無保証です。念のため、
-ゲームのフォルダのバックアップを取ってから当てることをおすすめします。
+ファンによる非公式の互換パッチです。原作の権利者・販売元とは関係ありません。
+正規に入手したゲームでのみお使いください。
+すべての環境での動作は保証できません。ご利用は自己責任でお願いします。
+パッチの適用や利用によって生じた不具合・損害については責任を負いかねます。
+念のため、ゲームのフォルダのバックアップを取ってから当てることをおすすめします。
 ゲームと素材の権利は各権利者に帰属します。
 
 
@@ -203,13 +205,13 @@ What is fixed
    are mapped only after a matching 0x02 and output-slot check, preventing
    stale-handle remaps after a failed NewMovieFromFile.
 - Display: Phase 3 part b fixes the Win11 top-down DIB height interpretation
-  used by FUN_004090F0. Logos, title screens, PUSH ANY BUTTON, and the
+  used by the game's screen drawing. Logos, title screens, PUSH ANY BUTTON, and the
   observed 12-second screen are upright in the real-screen A/B test.
 - Harbor screen: Bmp\HERBOR\MUSA.DOC is 587 pixels wide (every other
   full-screen BMP is 576), and the game shrinks it with the DC's default
   BLACKONWHITE stretch mode, which ANDs 8bpp palette indices of the merged
   columns and draws 11 white/cyan/magenta vertical lines (also on the
-  original OS). Phase 5 makes the BMP loader FUN_00407200 set COLORONCOLOR
+  original OS). Phase 5 makes the game's BMP loader set COLORONCOLOR
   (resolved via GetModuleHandleA/GetProcAddress; SetStretchBltMode is not
   imported) before its StretchDIBits call. 1:1 blits are unaffected.
 - Battle movies: the QTIM32 proxy performs a per-thread, 250-ms-throttled
@@ -379,7 +381,10 @@ intentionally excluded.
 
 Disclaimer
 ----------
-Use only with a copy of the game you are entitled to use. This compatibility
-patch is provided without warranty. Keep a backup of the installation and
-the original media; the game and its assets remain the property of their
-respective copyright holders.
+This is an unofficial fan-made compatibility patch, not affiliated with the
+rights holders or publishers of the game. Use only with a copy of the game
+you are entitled to use. The patch is provided as is, without warranty, and
+is not guaranteed to work in every environment; use it at your own risk. The
+author is not responsible for any problems or damage caused by applying or
+using it. Keep a backup of the installation and the original media; the game
+and its assets remain the property of their respective copyright holders.
