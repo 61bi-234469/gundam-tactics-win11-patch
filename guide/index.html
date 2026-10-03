@@ -774,10 +774,11 @@ flowchart TD
 <section id="roster">
   <h2><span class="no">14</span>パイロット名鑑 <span class="tag">130 PILOTS</span></h2>
   <p class="status" id="roster-src"></p>
-  <p class="sub">列見出しのボタンで並べ替えられます。「加入」は、そのパイロットが自軍に加わる可能性があるミッション（寄港時の増員候補）と、ゲーム開始時の候補（5人がランダムに選ばれる10人）です。「敵として登場」は、敵部隊に名前付きで配置されているミッションです。</p>
+  <p class="sub">列見出しのボタンで並べ替えられます。「加入タイミング」では、ゲーム開始時の候補や、特定のミッションの出撃前に増員候補になるパイロットだけに絞り込めます。「加入」は、そのパイロットが自軍に加わる可能性があるミッション（出撃前の増員候補）と、ゲーム開始時の候補（5人がランダムに選ばれる10人）です。「敵として登場」は、敵部隊に名前付きで配置されているミッションです。</p>
   <div class="controls">
     <label for="f-side">陣営<select id="f-side"><option value="">すべて</option><option>連邦</option><option>ジオン</option></select></label>
     <label for="f-kind">種類<select id="f-kind"><option value="named">名前付きのみ</option><option value="">すべて</option><option value="generic">一般兵のみ</option></select></label>
+    <label for="f-join">加入タイミング<select id="f-join"></select></label>
     <label for="f-q">名前で検索<input type="search" id="f-q" placeholder="例: ライデン、フレミング"></label>
   </div>
   <p class="count" id="f-count" role="status"></p>
@@ -885,7 +886,7 @@ flowchart TD
   <div><b>出典</b> 正規に入手した『ガンダムタクティクス MOBILITY FLEET0079』01版（2001年の復刻版）の動作を調べ、分かった仕様と数値を独自の文章・表・図にまとめました。ゲームの画像・文章・プログラム・データファイルは収録していません。ミッション一覧の地図は、粒子と艦の配置座標からこのページが独自に計算して描いた模式図です。ミッション名は、ゲーム内に名称がないため、このページで付けた呼び名です。</div>
   <div><b>権利表記</b> 本資料は非公式のファン資料で、権利者とは関係ありません。作品名・機体名・人物名などの権利は各権利者に帰属します。</div>
   <div><b>対象の版</b> 96版（1996年のオリジナル版）はプログラムが01版と同一で、ゲームデータも画像3枚を除いて同じことを確認しています。96版で攻略内容をプレイして確かめたわけではありません。</div>
-  <div><b>更新履歴</b> 2026-10-03: 斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
+  <div><b>更新履歴</b> 2026-10-03: パイロット名鑑に加入タイミングの絞り込みを追加。斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
   <div><b>未確認事項</b> 実機での動作確認は行っていません。1カウントの実時間、分岐条件「敵の離脱なし」の実際の挙動、戦艦の護衛命令の細部（コード上の不具合らしき箇所あり）は未確定です。</div>
   </div>
 </section>
@@ -1002,9 +1003,30 @@ const norm = s => String(s).normalize("NFKC").replace(/[\s・]/g,"").toLowerCase
 const firstMission = a => a&&a.length ? Math.min(...a.map(x=>x==="開始"?-1:+x)) : null;
 const sortVal = (p,k) => k==="join" ? firstMission(joins[p.n]) : k==="enemy" ? firstMission(enemyOf[p.n]) : p[k];
 let psort={k:null,dir:-1};
+// 加入タイミング filter: all / start pool / any reinforcement / never / one mission (value = mission number)
+function joinMatch(p,fj){
+  if(!fj) return true;
+  const j=joins[p.n]||[];
+  if(fj==="start") return j.includes("開始");
+  if(fj==="reinf") return j.some(x=>x!=="開始");
+  if(fj==="none") return !j.length;
+  return j.includes(fj);
+}
+// the mission options follow the side filter, so only missions that can add that side's pilots are listed
+function fillJoinFilter(){
+  const sel=document.getElementById("f-join"), fs=document.getElementById("f-side").value, keep=sel.value;
+  const opt=(v,t)=>`<option value="${v}">${esc(t)}</option>`;
+  const grp=sd=>{
+    const ms=DATA.missions.filter(m=>m.side===sd&&m.reachable&&m.recruits.length);
+    return ms.length?`<optgroup label="${sd}のミッションの出撃前に加入する候補">${ms.map(m=>opt(MID(m.id),`${MID(m.id)} ${m.title}（候補${m.recruits.length}人）`)).join("")}</optgroup>`:"";
+  };
+  sel.innerHTML=opt("","すべて")+opt("start","ゲーム開始時の候補")+opt("reinf","いずれかのミッションの増員候補")+opt("none","加入しない（敵・友軍専用）")+
+    (fs?grp(fs):grp("連邦")+grp("ジオン"));
+  sel.value=[...sel.options].some(o=>o.value===keep)?keep:"";
+}
 function pilotTable(){
-  const fs=document.getElementById("f-side").value, fk=document.getElementById("f-kind").value, q=norm(document.getElementById("f-q").value.trim());
-  let rows=DATA.pilots.filter(p=>(!fs||p.s===fs)&&(!fk||(fk==="generic")===p.g)&&(!q||norm(p.n).includes(q)));
+  const fs=document.getElementById("f-side").value, fk=document.getElementById("f-kind").value, fj=document.getElementById("f-join").value, q=norm(document.getElementById("f-q").value.trim());
+  let rows=DATA.pilots.filter(p=>(!fs||p.s===fs)&&(!fk||(fk==="generic")===p.g)&&joinMatch(p,fj)&&(!q||norm(p.n).includes(q)));
   if(psort.k){const k=psort.k;rows=[...rows].sort((a,b)=>{const x=sortVal(a,k),y=sortVal(b,k);
     if(x==null||y==null) return x==null&&y==null?0:x==null?1:-1;
     return (typeof x==="number"?x-y:String(x).localeCompare(String(y),"ja"))*psort.dir})}
@@ -1025,14 +1047,15 @@ function pilotTable(){
   cnt.innerHTML = rows.length ? `${rows.length}人を表示` :
     `条件に合うパイロットが見つかりませんでした。 <button type="button" class="btn" id="f-clear">条件を解除</button>`;
   const clr=document.getElementById("f-clear");
-  if(clr) clr.addEventListener("click",()=>{document.getElementById("f-side").value="";document.getElementById("f-kind").value="";document.getElementById("f-q").value="";pilotTable();document.getElementById("f-q").focus();});
+  if(clr) clr.addEventListener("click",()=>{document.getElementById("f-side").value="";document.getElementById("f-kind").value="";fillJoinFilter();document.getElementById("f-join").value="";document.getElementById("f-q").value="";pilotTable();document.getElementById("f-q").focus();});
 }
 document.getElementById("pilot-table").addEventListener("click",e=>{
   const b=e.target.closest(".sortbtn[data-k]"); if(!b) return;
   const k=b.dataset.k; psort = psort.k===k ? {k,dir:-psort.dir} : {k,dir:["n","s","spec","join","enemy"].includes(k)?1:-1};
   pilotTable();
 });
-["f-side","f-kind"].forEach(id=>document.getElementById(id).addEventListener("change",pilotTable));
+document.getElementById("f-side").addEventListener("change",()=>{fillJoinFilter();pilotTable();});
+["f-kind","f-join"].forEach(id=>document.getElementById(id).addEventListener("change",pilotTable));
 document.getElementById("f-q").addEventListener("input",pilotTable);
 /* ---- missions ---- */
 const MID = id => id==null ? "エンディング" : String(id).padStart(3,"0");
@@ -1778,7 +1801,7 @@ function draw(){
 sel.addEventListener("change",draw); rng.addEventListener("input",draw); linkNum("dist",draw);
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
-missionMax(); msTable(); shipTable(); growthTable(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw(); updateSrc();
+missionMax(); msTable(); shipTable(); growthTable(); fillJoinFilter(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw(); updateSrc();
 openMission(location.hash);
 // "back to contents" button appears once the table of contents has scrolled away
 new IntersectionObserver(([e])=>simEl("totop").classList.toggle("show",!e.isIntersecting&&e.boundingClientRect.top<0)).observe(simEl("toc"));
