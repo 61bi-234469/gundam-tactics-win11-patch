@@ -264,6 +264,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
 攻撃ゲージ += min(攻撃速, 操縦能力)   <span class="c">// 2000で1回攻撃</span></div>
       <ul>
         <li>1マス移動にかかるカウントは <code>500 ÷ 移動速</code>、攻撃の間隔は <code>2000 ÷ 攻撃速</code>。パイロットの<b>操縦能力</b>が機体の値より低いと、そちらで頭打ちになります。</li>
+        <li>1マスの移動は、縦・横・斜めの周囲8マスのどれかへの1歩です。<b>斜めの1歩も同じ500のゲージと推進剤1で済む</b>ため、斜めは横の約1.41倍の距離を進みます（<a href="#bugs">付録A</a>）。</li>
         <li>攻撃の番が来ても撃てる相手がいないと、溜めたゲージは 499 まで戻されます。</li>
         <li><b>推進剤</b>は移動の番が来るたびに1減ります（「停止」命令のときだけ減りません）。0になると移動ゲージは1カウントに10しか溜まりません。</li>
       </ul>
@@ -583,7 +584,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
 
 <section id="missions">
   <h2><span class="no">10</span>ミッション一覧 <span class="tag">42+1 MISSIONS</span></h2>
-  <p>ゲームに収録されたミッションは43件で、通常のプレイで到達できるのは42件（連邦20・ジオン22）です。残る1件（018）は未使用です。選択肢や戦果によって分岐します。ゲームデータにミッション名はないため、ここでの名前はブリーフィングの内容から付けた呼び名です。</p>
+  <p>ゲームに収録されたミッションは43件で、通常のプレイで到達できるのは42件（連邦20・ジオン22）です。残る1件（018）は未使用です。選択肢や戦果によって分岐します。ゲームデータにミッション名はないため、ここでの名前はブリーフィングの内容から付けた呼び名です。各ミッションの行には、理論上の最大得点（敵を増援まで全滅させ、自軍の損失がない場合）を表示しています。</p>
   <div class="two">
     <div class="rule"><h3><span class="side fed"></span>連邦の進行</h3><div class="flow"><pre class="mermaid">
 flowchart TD
@@ -847,7 +848,7 @@ flowchart TD
 
 <section id="save">
   <h2><span class="no">17</span>セーブデータビューア <span class="tag">SAVE VIEWER</span></h2>
-  <p>ゲームのセーブファイルを読み込むと、今の部隊の状態（功績、補充ポイント、旗艦、旗艦に積んでいるユニット、パイロットの現在の能力値）を表示します。読み込んだ値をこのページの計算機に反映することもできます。ファイルはブラウザの中で読むだけで、どこにも送信されません。</p>
+  <p>ゲームのセーブファイルを読み込むと、今の部隊の状態（功績、補充ポイント、旗艦、旗艦に積んでいるユニット、パイロットの現在の能力値）を表示し、その下に次のミッションの出撃前に起こること（新艦配備、補充されるユニット、追加パイロットの候補）を示します。読み込んだ値をこのページの計算機に反映することもできます。ファイルはブラウザの中で読むだけで、どこにも送信されません。</p>
   <div class="rule">
     <ul>
       <li>セーブファイルの場所は、Windows フォルダの <code>Gundam.ini</code> の <code>[Gundam]</code> セクション <code>DataDir=</code> に書かれたフォルダです（通常は <code>C:\G-TACT\</code>）。</li>
@@ -884,7 +885,7 @@ flowchart TD
   <div><b>出典</b> 正規に入手した『ガンダムタクティクス MOBILITY FLEET0079』01版（2001年の復刻版）の動作を調べ、分かった仕様と数値を独自の文章・表・図にまとめました。ゲームの画像・文章・プログラム・データファイルは収録していません。ミッション一覧の地図は、粒子と艦の配置座標からこのページが独自に計算して描いた模式図です。ミッション名は、ゲーム内に名称がないため、このページで付けた呼び名です。</div>
   <div><b>権利表記</b> 本資料は非公式のファン資料で、権利者とは関係ありません。作品名・機体名・人物名などの権利は各権利者に帰属します。</div>
   <div><b>対象の版</b> 96版（1996年のオリジナル版）はプログラムが01版と同一で、ゲームデータも画像3枚を除いて同じことを確認しています。96版で攻略内容をプレイして確かめたわけではありません。</div>
-  <div><b>更新履歴</b> 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
+  <div><b>更新履歴</b> 2026-10-03: 斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
   <div><b>未確認事項</b> 実機での動作確認は行っていません。1カウントの実時間、分岐条件「敵の離脱なし」の実際の挙動、戦艦の護衛命令の細部（コード上の不具合らしき箇所あり）は未確定です。</div>
   </div>
 </section>
@@ -1085,10 +1086,17 @@ function firstCheck(m){
   li.push(`<li><b>出撃前:</b> ${pre.join("、")||"寄港・補充・増員なし"}</li>`);
   return `<div class="first"><h4>まず確認すること</h4><ul>${li.join("")}</ul></div>`;
 }
+function scoreText(m){
+  const r=scoreParts(m), calc=`敵艦 ${r.ships}隻 × 10 ＋ 敵ユニット ${r.ms}機 × 3 ＋ ミッションボーナス ${r.bonus} ＝ <b>${r.total} 点</b>`;
+  if(m.ending) return `なし（最終ミッションは得点画面が出ず、功績にも加わりません）。参考: 同じ式の値は ${r.total} 点`;
+  const re=r.rShips||r.rMs ? `<br><span class="sub">増援が来る前に戦闘が終わった場合は、増援ぶん（艦 ${r.rShips}隻・ユニット ${r.rMs}機）を除いた <b>${r.noReinf} 点</b> が上限です。</span>` : "";
+  return `${calc}${re}<br><span class="sub">敵を増援まで全滅させ、自軍の艦・ユニットを1つも失わなかった場合の値です。</span>`;
+}
 function missionBody(m){
   const prev=(PREV[m.id]||[]).map(x=>`${mlink(x.m.id)}${x.l?`（${esc(x.l)}）`:""}`);
   return `${firstCheck(m)}`+
     `<dl class="kv"><dt>出撃地</dt><dd>${esc(m.harbor)}${m.newShip?"（基地に寄港: 新艦配備とユニット補充の判定あり）":""}</dd>`+
+    `<dt>理論上の最大得点</dt><dd>${scoreText(m)}</dd>`+
     (m.supply.length?`<dt>ユニット補充の候補</dt><dd>${m.supply.map(esc).join("、")}（<a href="#supply">決まり方</a>）</dd>`:"")+
     `<dt>パイロット増員</dt><dd>${m.recruits.length?`目標 ${m.roster} 人まで。候補: ${m.recruits.map(esc).join("、")}`:`目標 ${m.roster} 人（候補なし）`}</dd></dl>`+
     `<div class="mapwrap"></div>`+
@@ -1096,7 +1104,7 @@ function missionBody(m){
     `<div class="mnav"><span><b>次に進む先</b> ${branchLine(m)}</span>${prev.length?`<span><b>前のミッション</b> ${prev.join("、")}</span>`:""}</div>`+
     `<details class="more"><summary>評価と得点の詳細</summary><dl class="kv">`+
       `<dt>評価の条件</dt><dd>${esc(m.check)}（報告文が変わるだけ）</dd>`+
-      `<dt>得点</dt><dd>ミッションボーナス +${m.bonus}（全敵撃破で最大 ${m.maxScore}）、戦闘後の成長判定 ${m.rolls} 回</dd></dl></details>`;
+      `<dt>得点</dt><dd>ミッションボーナス +${m.bonus}、戦闘後の成長判定 ${m.rolls} 回（最大得点は上の「理論上の最大得点」）</dd></dl></details>`;
 }
 const MF = {side:"m-side", q:"m-q", dock:"m-f-dock", supply:"m-f-supply", reinf:"m-f-reinf", branch:"m-f-branch", unused:"m-f-unused"};
 function missionMatch(m){
@@ -1121,7 +1129,8 @@ function missionList(){
     if(m.newShip) flags.push('<span class="pill beam">寄港</span>');
     if(!m.reachable) flags.push('<span class="pill solid">未使用</span>');
     const enemyRe = m.enemy.reinforcements ? "・敵増援あり" : "";
-    return `<details class="mission" id="mission-${MID(m.id)}" data-id="${m.id}"${open.has(String(m.id))?" open":""}><summary><span class="mno">${side(m.side)}${MID(m.id)}</span><span class="mt">${esc(m.title)}</span><span class="flags">${flags.join("")}</span>`+
+    const sc = m.ending ? '<span class="pill solid">得点なし</span>' : `<span class="pill good" title="敵を増援まで全滅させ、自軍の損失がない場合">最大 ${m.maxScore} 点</span>`;
+    return `<details class="mission" id="mission-${MID(m.id)}" data-id="${m.id}"${open.has(String(m.id))?" open":""}><summary><span class="mno">${side(m.side)}${MID(m.id)}</span><span class="mt">${esc(m.title)}</span><span class="flags">${sc}${flags.join("")}</span>`+
       `<span class="mm">${esc(m.date)}・${esc(m.area)}${enemyRe}</span></summary><div class="mbody"></div></details>`;
   }).join("");
   list.querySelectorAll("details.mission[open]").forEach(fillMission);
@@ -1322,13 +1331,17 @@ function sim(){
 }
 /* ---- score routes ---- */
 const SHIPLV={"連邦":[["サラミス",0,4],["マゼラン",250,6],["ペガサス",600,8]],"ジオン":[["ムサイ",0,3],["ムサイ後期型",150,4],["ザンジバル",350,6],["チベ",600,8]]};  // [name, merit, unit capacity]
-function maxScore(m){
-  let s=m.bonus;
-  for(const p of Object.values(m.enemy)){ if(!p) continue;
-    for(const v of Object.values(p.ships||{})) s+=10*v;
-    for(const v of Object.values(p.ms||{})) s+=3*v; }
-  return s;
+// theoretical score: every enemy ship (x10) and unit (x3) destroyed, reinforcements included, nothing of ours lost
+function scoreParts(m){
+  const r={ships:0,ms:0,rShips:0,rMs:0,bonus:m.bonus};
+  for(const [k,p] of Object.entries(m.enemy)){ if(!p) continue;
+    const sh=Object.values(p.ships||{}).reduce((a,b)=>a+b,0), u=Object.values(p.ms||{}).reduce((a,b)=>a+b,0);
+    r.ships+=sh; r.ms+=u; if(k==="reinforcements"){ r.rShips+=sh; r.rMs+=u; } }
+  r.total=r.bonus+10*r.ships+3*r.ms;
+  r.noReinf=r.total-10*r.rShips-3*r.rMs;
+  return r;
 }
+const maxScore = m => scoreParts(m).total;
 const ROUTES=[];
 function routes(){
   const byId={}; DATA.missions.forEach(m=>byId[m.id]=m);
@@ -1382,12 +1395,17 @@ function greedy(types,points,stock){
   return {bought, waste:p+lost, capped:lost>0||n>11};
 }
 const summarize=b=>{const c={}; b.forEach(t=>c[t]=(c[t]||0)+1); return Object.entries(c).sort((x,y)=>COSTS[y[0]%7]-COSTS[x[0]%7]).map(([t,k])=>`${MS[t].n}×${k}`).join("、")||"なし";};
+// the smallest point total (up to +300) at which a more expensive set of units is bought
+function supplyNext(types,p,stock,r){
+  const cost=b=>b.reduce((s,t)=>s+COSTS[t%7],0);
+  for(let q=p+1;q<=p+300;q++){const g=greedy(types,q,stock); if(g.bought.length&&summarize(g.bought)!==summarize(r.bought)&&cost(g.bought)>cost(r.bought)) return {q,g};}
+  return null;
+}
 function supplyCalc(){
   const m=DATA.missions.find(x=>x.id===+simEl("sp-mission").value);
   syncNum("sp-points");
   const p=+simEl("sp-points").value, stock=+simEl("sp-stock").value;
-  const r=greedy(m.supplyTypes,p,stock);
-  let next=null; for(let q=p+1;q<=p+300;q++){const g=greedy(m.supplyTypes,q,stock); if(g.bought.length&&summarize(g.bought)!==summarize(r.bought)&&g.bought.reduce((s,t)=>s+COSTS[t%7],0)>r.bought.reduce((s,t)=>s+COSTS[t%7],0)){next={q,g};break;}}
+  const r=greedy(m.supplyTypes,p,stock), next=supplyNext(m.supplyTypes,p,stock,r);
   simEl("sp-out").innerHTML=`<div><span>ポイント</span><strong>${p}</strong></div><div><span>補充されるユニット</span><strong style="font-family:var(--display);font-size:17px">${summarize(r.bought)}</strong></div><div><span>捨てられるポイント</span><strong>${r.waste}</strong></div>`;
   simEl("sp-note").textContent=`候補: ${[...m.supplyTypes].sort((a,b)=>COSTS[b%7]-COSTS[a%7]).map(t=>`${MS[t].n}(${COSTS[t%7]})`).join("、")}。`+
     (r.capped?"在庫が12機に達したため、残りのポイントは捨てられます。":"")+
@@ -1436,6 +1454,7 @@ const BUGS=[
  ["仕様の穴","「遠隔攻撃」命令の間合いは パイロットの射撃能力 で決まり、射撃能力が低いほど近くまで寄る。","ビーム機は近いほど強いので、射撃能力が低いパイロットの方が威力を出しやすい面がある。","コード確認"],
  ["仕様の穴","新艦配備は1回の寄港で1段階だけ。功績が一気に600を超えても、サラミスからペガサスまで寄港2回が必要。","基地に寄港するミッションの数が配備の速さを決める。","コード確認"],
  ["仕様の穴","ユニット補充は高い機種から自動で買われ、余ったポイントは捨てられる。補充されたユニットは「ユニット編成」で積まないと出撃時に消える。","補充後は必ずユニット編成を確認する。","コード確認"],
+ ["仕様の穴","ユニットも戦艦も、移動は周囲8マス（縦・横・斜め）のどれかへの1歩で、斜めの1歩にも横と同じ移動ゲージ（ユニット500、戦艦5000）と推進剤1しか使わない。斜めの1歩は直線距離で √2 ≒ 1.41 マスなので、同じカウント・同じ推進剤で横の約1.41倍の距離を進める。目的地へは、縦横の差の小さい方を斜めで先に詰め、残りをまっすぐ進む（かかる歩数は縦横の差の大きい方で決まる。縦横30マスずつ離れた地点も、真横30マスの地点も30歩）。一方、射程・索敵・AIの距離判定は直線距離なので、斜め方向ほど距離あたりの所要カウントが少ない。","長い移動や敵への接近・離脱は、斜め45°に取ると直線距離で測って約0.71倍のカウントで済む（直線距離60マスの地点まで、真横なら60歩、斜めなら約42歩）。同じ直線距離でも、斜めにいる敵のほうが早く射程に入り、早く逃げられる。推進剤も同じで、まっすぐ離れたときの行動半径は推進剤÷2.3マスだが、斜めに離れると÷2.0マス（約15%遠く）まで行ける。敵・友軍・艦のAIにも同じ規則が働く。","コード確認、移動規則の再現計算"],
  ["仕様の穴","「停止」以外の命令は、動かなくても移動の番ごとに推進剤を1消費する。","待ち伏せには「停止」を使う。","コード確認"],
  ["仕様の穴","CONDITION はユニットに乗ったまま艦内にいても回復しない。控え（ユニットから降ろす）にしたときだけ回復する。","連戦させるパイロットは帰艦後にいったん降ろす。","コード確認"],
  ["仕様の穴","ユニット同士の攻撃で命中判定の乱数は0〜99（ごくまれに100）で「命中率以下なら命中」なので、表示上の命中率より1%高い（95%なら96%）。","影響は小さい。","コード確認"],
@@ -1529,6 +1548,70 @@ document.addEventListener("click",e=>{ if(e.target.closest("[data-save-reset]"))
 function clearLoaded(msg){
   LOADED=null; simEl("save-out").innerHTML=""; simEl("save-msg").textContent=msg; updateSrc();
 }
+// first missions after this one (one per branch) that supply units
+function laterSupply(m){
+  const out=[], seen=new Set();
+  const walk=(n,k)=>{
+    if(n==null||seen.has(n)||k>12||!MBYID[n]) return; seen.add(n);
+    const x=MBYID[n];
+    if(x.newShip&&x.supplyTypes.length){ out.push(x); return; }
+    if(x.ending) return;
+    walk(x.a,k+1); if(x.b!==x.a) walk(x.b,k+1);
+  };
+  if(!m.ending){ walk(m.a,0); if(m.b!==m.a) walk(m.b,0); }
+  return out.slice(0,4);
+}
+const candList=m=>[...m.supplyTypes].sort((a,b)=>COSTS[b%7]-COSTS[a%7]).map(t=>`${MS[t].n}(${COSTS[t%7]})`).join("、");
+// everything the next mission does before sortie: new ship, unit supply, pilot reinforcement
+function nextMissionBlock(s,m,side,lvs,cur,next,head,row,byId){
+  const sideIdx=s.side;
+  if(!m) return `<h3 style="margin-top:22px">次のミッション</h3><p class="sub">ミッション ${MID(s.mission)} はこのページに載っていません。</p>`;
+  const li=[];
+  // new ship
+  if(!m.newShip) li.push(`<li><b>新艦配備:</b> なし（基地に寄港しないミッションです）</li>`);
+  else if(!next) li.push(`<li><b>新艦配備:</b> 旗艦はすでに最上位（${esc(LVNAME[s.lv]||s.lv)}）です。</li>`);
+  else if(s.merit>=next[1]) li.push(`<li><b>新艦配備:</b> 出撃前に旗艦が<b>${next[0]}</b>（ユニット搭載${next[2]}機）に更新されます（功績 ${s.merit} ≧ ${next[1]}）。</li>`);
+  else li.push(`<li><b>新艦配備:</b> 寄港しますが、功績が ${next[1]} に届かないため更新されません（あと ${next[1]-s.merit}）。</li>`);
+  // supply
+  if(!m.newShip){
+    li.push(`<li><b>ユニット補充:</b> なし（寄港しないので、補充ポイント ${s.pts} は持ち越されます）</li>`);
+  } else if(!m.supplyTypes.length){
+    li.push(`<li><b>ユニット補充:</b> なし（このミッションには補充候補がなく、補充ポイント ${s.pts} は持ち越されます）</li>`);
+  } else {
+    const stock=s.hangar.length, r=greedy(m.supplyTypes,s.pts,stock), nx=supplyNext(m.supplyTypes,s.pts,stock,r);
+    const units=r.bought.length;
+    li.push(`<li><b>ユニット補充:</b> 補充ポイント ${s.pts} で、<b>${summarize(r.bought)}</b>${units?`（${units}機）`:""}が補充されます。`+
+      (units?`捨てられるポイントは ${r.waste}。`:`ポイントが最も安い候補（${COSTS[Math.min(...m.supplyTypes.map(t=>t%7))]}）に届かないので、補充はなく持ち越されます。`)+
+      `<br><span class="sub">候補（コスト）: ${candList(m)}。基地のユニットは ${stock}機。`+
+      (units?`補充後は ${stock+units}機になります。補充されたユニットは「ユニット編成」で旗艦に積まないと出撃時に消えます。`:"")+
+      (r.capped?"12機に達するため、残りのポイントは捨てられます。":"")+
+      (nx?` あと ${nx.q-s.pts} ポイントあれば「${summarize(nx.g.bought)}」になります。`:"")+`</span></li>`);
+  }
+  // later supply when this mission has none
+  let later="";
+  if(!m.newShip||!m.supplyTypes.length){
+    const ls=laterSupply(m);
+    later=ls.length?`<p class="sub">この先で補充があるミッション（分岐ごとに最初のもの）: ${ls.map(x=>`${mlink(x.id)}（${candList(x)}）`).join("、")}</p>`:"";
+  }
+  // pilots
+  const have=s.roster.length, want=m.roster, lack=Math.max(0,want-have);
+  const cands=m.recruits.map(n=>{
+    const o=DATA.pilots.find(p=>p.n===n&&Math.floor(p.id/50)===sideIdx);
+    return o?(byId[o.id]||{id:o.id,op:o.op,sh:o.sh,ev:o.ev,st:o.st,exp:o.exp,status:0}):null;
+  }).filter(Boolean);
+  li.push(`<li><b>パイロット増員:</b> 乗艦パイロット ${have}人、このミッションの目標 ${want}人。`+
+    (lack?`不足の <b>${lack}人</b> が、下の候補（${cands.length}人）からランダムに加わります。`
+      :`目標人数に達しているので、増員はありません。`)+
+    (!cands.length&&lack?`（候補がいないので増員されません）`:"")+
+    (lack&&cands.length&&lack<cands.length?` 誰が来るかは抽選で決まります（<a href="#bugs">起動直後にロードしたときは決まった順になります</a>）。`:"")+`</li>`);
+  const candTbl=cands.length?`<h4 style="margin:12px 0 4px">追加パイロットの候補（${cands.length}人${lack?`から ${Math.min(lack,cands.length)}人が加わる`:"・今回は不足がないので加わりません"}）</h4>`+
+    `<div class="tbl"><table>${head}<tbody>${cands.map(row).join("")}</tbody></table></div>`:"";
+  return `<h3 style="margin-top:22px">次のミッション</h3>`+
+    `<div class="rule"><p style="margin:0 0 6px"><b>${mlink(m.id)}</b> <span class="sub">${esc(m.date)}・${esc(m.area)}・出撃地 ${esc(m.harbor)}</span></p>`+
+    `<p class="sub" style="margin:0 0 6px">出撃前に行われる処理を、このセーブの値で計算しました（新艦配備 → ユニット補充 → パイロット増員の順）。</p>`+
+    `<ul>${li.join("")}</ul>${later}${candTbl}</div>`+
+    `<p style="margin-top:12px"><button type="button" class="btn" id="save-to-supply">補充ポイントをユニット補充の計算機に入れる</button></p>`;
+}
 function showSave(s,name){
   const out=simEl("save-out");
   if(s.empty){ clearLoaded(`「${name}」は空のスロットです（セーブされていません）。${APPLIED?"反映中の能力値はそのままです。":""}`); return; }
@@ -1547,7 +1630,6 @@ function showSave(s,name){
   const dead=s.pilots.filter(p=>p.status===3);
   out.innerHTML=
     `<div class="readout" style="margin:8px 0 14px"><div><span>陣営</span><strong style="font-family:var(--display)">${side}</strong></div>`+
-    `<div><span>次のミッション</span><strong style="font-family:var(--display);font-size:17px">${m?mlink(m.id):MID(s.mission)}</strong></div>`+
     `<div><span>功績</span><strong>${s.merit}</strong></div><div><span>補充ポイント</span><strong>${s.pts}</strong></div>`+
     `<div><span>旗艦</span><strong style="font-family:var(--display)">${LVNAME[s.lv]||s.lv}</strong></div>`+
     `<div><span>次の新艦まで</span><strong style="font-family:var(--display);font-size:16px">${next?`${next[0]}（あと${Math.max(0,next[1]-s.merit)}）`:"最上位"}</strong></div></div>`+
@@ -1555,10 +1637,11 @@ function showSave(s,name){
     (s.pilots.length?`<h3 style="margin-top:12px">乗艦パイロット（${roster.length}人）</h3><p class="sub">かっこ内はゲーム開始時からの伸び。NT・SPEC はセーブされない固定値です。</p><div class="tbl">${"<table>"+head+"<tbody>"+roster.map(row).join("")+"</tbody></table>"}</div>`+
       (dead.length?`<h3 style="margin-top:12px">戦死（${dead.length}人）</h3><div class="tbl"><table>${head}<tbody>${dead.map(row).join("")}</tbody></table></div>`:"")
      :`<p class="sub">このファイルには部隊の状態だけが入っています（パイロットの能力値はありません）。</p>`)+
-    `<p style="margin-top:12px"><button type="button" class="btn" id="save-to-supply">補充ポイントをユニット補充の計算機に入れる</button></p>`;
+    nextMissionBlock(s,m,side,lvs,cur,next,head,row,byId);
   simEl("save-msg").textContent=`読み込みました: 「${name}」 ${side} / 次のミッション ${MID(s.mission)}`;
   updateSrc();
-  simEl("save-to-supply").addEventListener("click",()=>{
+  const toSupply=simEl("save-to-supply");
+  if(toSupply) toSupply.addEventListener("click",()=>{
     simEl("sp-points").value=Math.min(1500,s.pts); simEl("sp-stock").value=Math.min(11,s.hangar.length);
     if(m&&m.supplyTypes.length&&m.reachable) simEl("sp-mission").value=m.id;
     supplyCalc(); document.getElementById("supply").scrollIntoView({behavior:SMOOTH()});
