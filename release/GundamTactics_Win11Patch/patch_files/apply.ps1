@@ -1,4 +1,4 @@
-# v1.2.1
+# v1.2.2
 param(
     [string]$InstallPath = "",
     [switch]$RegisterAppCompat,
@@ -20,9 +20,10 @@ $KnownLegacyPatchedSha256 = @(
 # (Windows MAX_PATH, kept within QuickTime's 255-byte path strings).
 $MaxFullPathBytes = 256
 $ExpectedRuntimeSha256 = "dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f"
-$ExpectedProxySha256 = "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0"
-# QTIM32.DLL proxies of v1.0.10-v1.2.0; applying over one of them upgrades it.
+$ExpectedProxySha256 = "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810"
+# QTIM32.DLL proxies of v1.0.10-v1.2.1; applying over one of them upgrades it.
 $KnownPreviousProxySha256 = @(
+    "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0",
     "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489",
     "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2",
     "08e39f76c954248d1f92541e9c4f0b9a46604d97ed1187469164377f0e7397b1",
@@ -519,7 +520,7 @@ try {
         throw "test failure injected after AppCompat commit"
     }
     $committed = $true
-    Write-Host "v1.2.1 apply committed atomically: $gameDir"
+    Write-Host "v1.2.2 apply committed atomically: $gameDir"
     if ($wantsAppCompat) { Write-Host "AppCompat pre-state saved in $sidecar" }
 } catch {
     try {

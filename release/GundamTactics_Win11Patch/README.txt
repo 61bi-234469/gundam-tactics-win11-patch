@@ -1,5 +1,5 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.2.1
+Windows 11 互換パッチ v1.2.2
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
@@ -52,7 +52,7 @@ Windows 11 で動かすと、プロパティの設定(互換モード、管理�
 
 ※ ゲームを C:\Program Files などに入れている場合は、途中で「このアプリが
   デバイスに変更を加えることを許可しますか?」と出ます。「はい」を選んでください。
-※ 以前のバージョン(v1.0.x / v1.1.0)のパッチを当てている場合も、そのまま同じ手順で
+※ 以前のバージョン(v1.0.x / v1.1.0 / v1.2.0 / v1.2.1)のパッチを当てている場合も、そのまま同じ手順で
   上書きできます。先に元に戻す必要はありません。
 
 
@@ -241,7 +241,9 @@ What is fixed
   mapped back to 576x416 in a window subclass. During movies, which do not
   read the message queue, queued title-bar/border presses are dispatched so
   the window can still be moved and resized; close, minimize, and the
-  system menu still wait for the game. Settings in `qtim_compat.ini`
+  system menu still wait for the game. While the title bar or border is
+  held, the movie's clock and sound are paused (v1.2.2), so on release
+  the movie resumes where it stopped instead of jumping ahead. Settings in `qtim_compat.ini`
   `[display]`: `scale=auto|off|2..8` (initial size; `off` installs no hooks
   and keeps the original window), `filter=auto|nearest|smooth` (auto:
   nearest at whole multiples, halftone otherwise), `fullscreen=0|1`.
@@ -296,10 +298,10 @@ the game folder never overwrites the game's QTIM32.DLL/CMGR32.DLL. The script ve
   script refuses to overwrite it. A failed transaction restores all files,
   registry state, and the sidecar.
 
-Updating from v1.0.2-v1.0.16 or v1.1.0: run the new apply.ps1 on the
+Updating from v1.0.2-v1.0.16, v1.1.0, v1.2.0 or v1.2.1: run the new apply.ps1 on the
 patched folder.
 It rebuilds gundam.exe from the verified `gundam.exe.orig`; no revert is
-needed first. A QTIM32.DLL proxy from v1.0.10-v1.0.16 is replaced in place
+needed first. A QTIM32.DLL proxy from v1.0.10-v1.2.1 is replaced in place
 (QTIM32R.DLL must still be the verified original runtime). To move the game
 to a longer folder, move the whole folder
 (including `gundam.exe.orig`, QTIM32R.DLL, and CMGR32R.DLL) after applying.
@@ -366,7 +368,7 @@ Previous patched gundam.exe (accepted for upgrade):
 Stock QTIM32.DLL:
   dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f
 Release QTIM32.dll proxy:
-  054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0
+  785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810
 Stock CMGR32.DLL:
   9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4
 Release CMGR32.dll companion proxy:

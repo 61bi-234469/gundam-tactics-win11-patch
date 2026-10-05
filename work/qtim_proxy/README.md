@@ -103,6 +103,9 @@ For the controller/movie lifetime regression test, set
 `controller_reuse_selftest=PASS`; the test covers a failed `0x2A` without
 `0x02`, reuse of movie handle `03C84C08` with `0x02`, normal `0x07` pass-through,
 fake-controller `0x07` absorption, and forwarding of a live `0x36` call.
+QTIM32 also logs `modal_pause_selftest=PASS`: a 150 ms move/size loop must
+pause the movie's waveOut stream and push its controller and the shared
+clock back by the loop's length.
 
 For Phase 3 display diagnosis, set QTIM_GDI_TRACE=1 before starting the
 game. The proxy then observes the main executable's imported GDI calls
@@ -144,6 +147,14 @@ from the game (it only sees minimize and the restore after it), and toggles
 borderless fullscreen on Alt+Enter. From the movie paths above, queued
 `WM_NCLBUTTONDOWN`/`DBLCLK` on the caption, border or maximize button are
 dispatched so the window can be moved and resized during movies.
+The game's thread is blocked in USER32's modal move/size loop while the
+button is held, so between `WM_ENTERSIZEMOVE` and `WM_EXITSIZEMOVE` the
+proxy pauses every movie's waveOut stream and then pushes every emulated
+controller's start time (and the shared clock CMGR reads) back by the
+loop's length: the movie resumes at the frame where it stopped, in step with
+its sound, instead of jumping ahead (trace `modal_loop enter/exit`).
+Controller-less GetMoviePict movies take their time from the game and are
+not covered; none of the battle movies use that path.
 `[display] scale=off` (or `QTIM_DISPLAY_SCALE=off`) installs nothing.
 `work/tools/qtdraw_probe` logs the original runtime's drawing calls.
 

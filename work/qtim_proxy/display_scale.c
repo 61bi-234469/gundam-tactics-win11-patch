@@ -84,6 +84,20 @@ typedef struct HelperParam {
 } HelperParam;
 /* Counts draws into the shadow by anyone but the proxy's own SMC drawing. */
 static volatile LONG g_foreign_draws;
+/* Told when a modal move/size loop on the main window starts and ends; both
+ * happen on the window's thread. */
+static GtScaleModalFn g_modal_cb;
+static int g_in_modal;
+
+static void modal_loop_changed(int entering) {
+    if (entering == g_in_modal) return;
+    g_in_modal = entering;
+    if (g_modal_cb) g_modal_cb(entering);
+}
+
+void gt_scale_set_modal_callback(GtScaleModalFn fn) {
+    g_modal_cb = fn;
+}
 
 static void scale_log(const char *fmt, ...) {
     char buf[256];
@@ -448,8 +462,15 @@ static LRESULT CALLBACK scale_wndproc(HWND hwnd, UINT msg, WPARAM wp,
     case WM_SYSCHAR:
         if (wp == VK_RETURN) return 0; /* no beep for Alt+Enter */
         break;
+    case WM_ENTERSIZEMOVE:
+        modal_loop_changed(1);
+        break;
+    case WM_EXITSIZEMOVE:
+        modal_loop_changed(0);
+        break;
     case WM_NCDESTROY: {
         WNDPROC orig = g_orig_proc;
+        modal_loop_changed(0);
         SetWindowLongA(hwnd, GWL_WNDPROC, (LONG)(uintptr_t)orig);
         g_main = NULL;
         return CallWindowProcA(orig, hwnd, msg, wp, lp);

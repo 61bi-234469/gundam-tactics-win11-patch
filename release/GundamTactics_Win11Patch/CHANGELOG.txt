@@ -1,6 +1,23 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.2.2 - 2026-10-05
+--------------------
+- Moving or resizing the window during a battle (or sortie/cruise) movie
+  no longer makes the movie jump ahead out of step with its sound. While
+  the title bar or border is held, Windows keeps the game waiting, but
+  the movie's clock and sound kept running, so on release the picture
+  skipped ahead and a short reaction movie could end unseen. The movie's
+  sound is now paused for the drag and its clock is set back by the
+  drag's length, so the movie continues from the frame where it stopped.
+  The picture still stands still while the button is held. Only the
+  QTIM32 proxy changed (it needs window scaling, the default; with
+  scale=off the window cannot be dragged during movies anyway);
+  gundam.exe patch bytes, the CMGR32 proxy and the installer behaviour
+  are the same as v1.2.1.
+- apply.ps1 and revert.ps1 accept the v1.2.1 QTIM32 proxy and upgrade or
+  remove it in place.
+
 v1.2.1 - 2026-10-03
 --------------------
 - Lighter on the game thread, fewer chances of "Not Responding". Only the

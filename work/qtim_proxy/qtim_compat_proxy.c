@@ -74,6 +74,8 @@ typedef struct MovieMap {
     uint32_t audio_cursor;
     uint32_t audio_last_movie_time;
     struct AudioChunk *audio_chunks;
+    /* waveOutPause succeeded on audio_out for a window move/size loop. */
+    int audio_paused;
 } MovieMap;
 
 typedef struct AudioChunk {
@@ -238,6 +240,13 @@ static void clear_movie_tombstones_locked(uint32_t movie_handle);
 static void clear_movie_file_bindings_locked(uint32_t movie_handle);
 static void map_movie_handle_locked(uint32_t handle, const char *path);
 static int run_controller_reuse_selftest(void);
+static int run_modal_pause_selftest(void);
+/* A movie whose waveOutRestart failed after a window move/size loop keeps
+ * audio_paused; this asks maybe_pump_messages to retry. */
+static volatile LONG g_audio_restart_pending = 0;
+/* Set between WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE (window's thread). */
+static int g_modal_paused = 0;
+static int restart_paused_audio(int *attempted);
 uint32_t __cdecl compat_dispatch(uint32_t *f);
 
 FARPROC p_EntryPoint;
@@ -1590,6 +1599,7 @@ static void maybe_pump_messages(HWND hwnd) {
         (DWORD)(now - state->message_pump_last_tick) < 250u) return;
     state->message_pump_initialized = 1;
     state->message_pump_last_tick = now;
+    if (g_audio_restart_pending && !g_modal_paused) restart_paused_audio(NULL);
     if (!hwnd) {
         /* GetMoviePict movies have no controller and so no target window;
          * use the game's main window so their loops still check the queue
@@ -2266,6 +2276,7 @@ static AudioTeardown *detach_movie_audio_state(MovieMap *movie) {
     movie->audio_cursor = 0;
     movie->audio_last_movie_time = UINT32_MAX;
     movie->audio_chunks = NULL;
+    movie->audio_paused = 0;
     return teardown;
 }
 
@@ -2923,6 +2934,179 @@ static void map_movie_handle_locked(uint32_t handle, const char *path) {
     }
 }
 
+/* ---- window move/size loop ----
+ *
+ * While the user drags the window's caption or border, USER32 runs a modal
+ * loop on the game's thread (entered from gt_scale_service_frame_input inside
+ * a movie selector, or from the game's own DispatchMessage), so the game
+ * stops.  The emulated controller clock (GetTickCount based) and the waveOut
+ * stream would keep running and the movie would jump ahead on release.  Pause
+ * the audio for the loop and push each controller's start back by its
+ * length.  Controller-less GetMoviePict movies take their time from the game
+ * and are not covered (none of the battle movies use that path).  WinMM is
+ * called outside g_state_lock. */
+enum { MODAL_CAPACITY = 32 };
+static DWORD g_modal_start_tick = 0;
+/* Controllers present when the loop started, with their start then.  Only
+ * these, still unchanged at the end (no 0x31 reset, no re-creation), are
+ * shifted. */
+static uint32_t g_modal_controllers[MODAL_CAPACITY];
+static DWORD g_modal_controller_starts[MODAL_CAPACITY];
+static int g_modal_controller_count = 0;
+/* Restarts every paused movie stream; a stream stays marked until its
+ * restart succeeds.  Returns the number restarted and stores the attempts. */
+static int restart_paused_audio(int *attempted) {
+    HWAVEOUT outs[MODAL_CAPACITY];
+    uint32_t movies[MODAL_CAPACITY];
+    MMRESULT results[MODAL_CAPACITY];
+    int count = 0;
+    int restarted = 0;
+    int failed = 0;
+    char buf[160];
+    int written;
+    int i;
+
+    InterlockedExchange(&g_audio_restart_pending, 0);
+    EnterCriticalSection(&g_state_lock);
+    for (i = 0; i < g_movie_count && count < MODAL_CAPACITY; i++) {
+        if (g_movies[i].audio_paused && g_movies[i].audio_out) {
+            outs[count] = g_movies[i].audio_out;
+            movies[count] = g_movies[i].handle;
+            count++;
+        }
+    }
+    LeaveCriticalSection(&g_state_lock);
+    for (i = 0; i < count; i++) results[i] = waveOutRestart(outs[i]);
+    EnterCriticalSection(&g_state_lock);
+    for (i = 0; i < count; i++) {
+        MovieMap *movie = find_movie(movies[i]);
+        if (!movie || movie->audio_out != outs[i]) continue;
+        if (results[i] == MMSYSERR_NOERROR) {
+            movie->audio_paused = 0;
+            restarted++;
+        } else {
+            failed++;
+        }
+    }
+    LeaveCriticalSection(&g_state_lock);
+    if (failed) {
+        /* The retry runs every 250 ms; log a failing stream only when its
+         * movie or result changes, or every 5 s. */
+        static uint32_t last_movie = 0;
+        static MMRESULT last_result = MMSYSERR_NOERROR;
+        static DWORD last_tick = 0;
+        DWORD now = GetTickCount();
+        InterlockedExchange(&g_audio_restart_pending, 1);
+        for (i = 0; i < count; i++) {
+            if (results[i] == MMSYSERR_NOERROR) continue;
+            if (movies[i] == last_movie && results[i] == last_result &&
+                (DWORD)(now - last_tick) < 5000u)
+                continue;
+            last_movie = movies[i];
+            last_result = results[i];
+            last_tick = now;
+            written = snprintf(buf, sizeof(buf),
+                               "%lu\tmodal_loop\trestart_failed\tmovie=%08X\t"
+                               "mmresult=%u\n",
+                               (unsigned long)GetTickCount(),
+                               (unsigned)movies[i], (unsigned)results[i]);
+            if (written > 0) log_text(buf);
+        }
+    }
+    if (attempted) *attempted = count;
+    return restarted;
+}
+
+static void modal_loop_notify(int entering) {
+    HWAVEOUT outs[MODAL_CAPACITY];
+    uint32_t movies[MODAL_CAPACITY];
+    int ok[MODAL_CAPACITY];
+    int count = 0;
+    int paused = 0;
+    int shifted = 0;
+    int shared_shifted = 0;
+    int restarted;
+    DWORD elapsed;
+    char buf[160];
+    int written;
+    int i;
+
+    if (!g_locks_ready) return;
+    if (entering) {
+        if (g_modal_paused) return;
+        g_modal_paused = 1;
+        g_modal_start_tick = GetTickCount();
+        EnterCriticalSection(&g_state_lock);
+        g_modal_controller_count = 0;
+        for (i = 0; i < g_controller_count &&
+                    g_modal_controller_count < MODAL_CAPACITY; i++) {
+            g_modal_controllers[g_modal_controller_count] =
+                g_controllers[i].handle;
+            g_modal_controller_starts[g_modal_controller_count] =
+                g_controllers[i].start_tick;
+            g_modal_controller_count++;
+        }
+        for (i = 0; i < g_movie_count && count < MODAL_CAPACITY; i++) {
+            if (g_movies[i].handle && g_movies[i].audio_out &&
+                !g_movies[i].audio_paused) {
+                outs[count] = g_movies[i].audio_out;
+                movies[count] = g_movies[i].handle;
+                count++;
+            }
+        }
+        LeaveCriticalSection(&g_state_lock);
+        for (i = 0; i < count; i++)
+            ok[i] = waveOutPause(outs[i]) == MMSYSERR_NOERROR;
+        EnterCriticalSection(&g_state_lock);
+        for (i = 0; i < count; i++) {
+            MovieMap *movie = ok[i] ? find_movie(movies[i]) : NULL;
+            if (movie && movie->audio_out == outs[i]) {
+                movie->audio_paused = 1;
+                paused++;
+            }
+        }
+        LeaveCriticalSection(&g_state_lock);
+        written = snprintf(buf, sizeof(buf),
+                           "%lu\tmodal_loop\tenter\taudio_paused=%d/%d\n",
+                           (unsigned long)g_modal_start_tick, paused, count);
+        if (written > 0) log_text(buf);
+        return;
+    }
+
+    if (!g_modal_paused) return;
+    g_modal_paused = 0;
+    elapsed = GetTickCount() - g_modal_start_tick;
+    EnterCriticalSection(&g_state_lock);
+    for (i = 0; i < g_modal_controller_count; i++) {
+        ControllerMap *controller = find_controller(g_modal_controllers[i]);
+        if (!controller ||
+            controller->start_tick != g_modal_controller_starts[i])
+            continue;
+        controller->start_tick += elapsed;
+        shifted++;
+        if (g_shared && g_shared->magic == GT_CONTROLLER_SHARED_MAGIC &&
+            g_shared->active &&
+            g_shared->controller_handle == controller->handle &&
+            g_shared->start_tick == g_modal_controller_starts[i]) {
+            /* The shared slot describes one controller: shift only its
+             * start, leaving its identity and the journal alone. */
+            gt_controller_shared_begin_write(g_shared);
+            g_shared->start_tick = controller->start_tick;
+            gt_controller_shared_end_write(g_shared);
+            shared_shifted = 1;
+        }
+    }
+    g_modal_controller_count = 0;
+    LeaveCriticalSection(&g_state_lock);
+    restarted = restart_paused_audio(&count);
+    written = snprintf(buf, sizeof(buf),
+                       "%lu\tmodal_loop\texit\telapsed=%lu\tcontrollers=%d\t"
+                       "shared=%d\taudio_restarted=%d/%d\n",
+                       (unsigned long)GetTickCount(), (unsigned long)elapsed,
+                       shifted, shared_shifted, restarted, count);
+    if (written > 0) log_text(buf);
+}
+
 static const char *path_for_movie(uint32_t handle) {
     for (int i = g_movie_count - 1; i >= 0; i--) {
         if (g_movies[i].handle == handle) return g_movies[i].rel_path;
@@ -3189,6 +3373,103 @@ static int run_controller_reuse_selftest(void) {
     reset_selftest_state_locked();
     LeaveCriticalSection(&g_state_lock);
     drain_audio_teardowns();
+    return passed;
+}
+
+/* A move/size loop of about 150 ms must push the controller (and the shared
+ * clock CMGR reads) back by its length and pause/restart the movie audio.
+ * A clock reset (0x31) during the loop must not be shifted afterwards.  The
+ * audio half needs a wave device; without one it is reported as skipped. */
+static int run_modal_pause_selftest(void) {
+    const uint32_t movie_handle = 0x05123450u;
+    const char *smc_path = "Movie\\HMZK\\HMZK_06.mov";
+    uint32_t controller_handle = 0;
+    DWORD before = 0;
+    DWORD shift = 0;
+    DWORD reset_start = 0;
+    int audio_open = 0;
+    int audio_paused = 0;
+    int audio_restarted = 0;
+    int shared_ok = 0;
+    int reset_kept = 0;
+    int passed = 1;
+    MovieMap *movie;
+    ControllerMap *controller;
+    char buf[224];
+    int written;
+
+    EnterCriticalSection(&g_state_lock);
+    reset_selftest_state_locked();
+    map_movie_handle_locked(movie_handle, smc_path);
+    movie = find_movie(movie_handle);
+    controller = movie ? create_controller_locked(movie, 0) : NULL;
+    if (!movie || !movie->decoder || !controller) {
+        passed = 0;
+    } else {
+        controller->start_tick -= 50;
+        shared_refresh_controller(controller, movie);
+        before = controller->start_tick;
+        controller_handle = controller->handle;
+    }
+    LeaveCriticalSection(&g_state_lock);
+    if (passed) {
+        start_movie_audio(movie);
+        audio_open = movie->audio_out != NULL;
+    }
+
+    /* 1: the loop shifts the clock and pauses/restarts the audio. */
+    modal_loop_notify(1);
+    EnterCriticalSection(&g_state_lock);
+    movie = find_movie(movie_handle);
+    audio_paused = movie && movie->audio_paused;
+    if (audio_open && !audio_paused) passed = 0;
+    LeaveCriticalSection(&g_state_lock);
+    Sleep(150);
+    modal_loop_notify(0);
+
+    EnterCriticalSection(&g_state_lock);
+    controller = find_controller(controller_handle);
+    movie = find_movie(movie_handle);
+    if (!controller) {
+        passed = 0;
+    } else {
+        shift = controller->start_tick - before;
+        if (shift < 140 || shift > 1000) passed = 0;
+        /* The refresh above made this controller the shared one. */
+        shared_ok = g_shared &&
+            g_shared->magic == GT_CONTROLLER_SHARED_MAGIC &&
+            g_shared->active &&
+            g_shared->controller_handle == controller_handle &&
+            g_shared->start_tick == controller->start_tick;
+        if (!shared_ok) passed = 0;
+    }
+    audio_restarted = audio_open && movie && !movie->audio_paused;
+    if (audio_open && !audio_restarted) passed = 0;
+    LeaveCriticalSection(&g_state_lock);
+
+    /* 2: a 0x31 clock reset inside the loop stays as reset. */
+    modal_loop_notify(1);
+    EnterCriticalSection(&g_state_lock);
+    shared_reset_movie_clock(movie_handle);
+    controller = find_controller(controller_handle);
+    reset_start = controller ? controller->start_tick : 0;
+    LeaveCriticalSection(&g_state_lock);
+    Sleep(50);
+    modal_loop_notify(0);
+    EnterCriticalSection(&g_state_lock);
+    controller = find_controller(controller_handle);
+    reset_kept = controller && controller->start_tick == reset_start;
+    if (!reset_kept) passed = 0;
+    reset_selftest_state_locked();
+    LeaveCriticalSection(&g_state_lock);
+    drain_audio_teardowns();
+    written = snprintf(buf, sizeof(buf),
+                       "modal_pause_selftest_detail=shift=%lu\taudio=%s\t"
+                       "audio_paused=%d\taudio_restarted=%d\tshared_ok=%d\t"
+                       "reset_kept=%d\n",
+                       (unsigned long)shift, audio_open ? "tested" : "skipped",
+                       audio_paused, audio_restarted, shared_ok, reset_kept);
+    if (written > 0) log_text(buf);
     return passed;
 }
 
@@ -3692,6 +3973,12 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
         if (g_log != INVALID_HANDLE_VALUE)
             log_text(passed ? "controller_reuse_selftest=PASS\n"
                             : "controller_reuse_selftest=FAIL\n");
+        g_selftest_running = 1;
+        passed = run_modal_pause_selftest();
+        g_selftest_running = 0;
+        if (g_log != INVALID_HANDLE_VALUE)
+            log_text(passed ? "modal_pause_selftest=PASS\n"
+                            : "modal_pause_selftest=FAIL\n");
     }
 
     if (sel == 0x2C) {
@@ -4372,6 +4659,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
             g_input_fix_enabled = install_input_iat_hooks();
         else
             log_text("input_fix=off\treason=disabled\n");
+        gt_scale_set_modal_callback(modal_loop_notify);
         {
             char ini_path[MAX_PATH];
             gt_scale_attach(build_trace_ini_path(self, ini_path,

@@ -37,6 +37,13 @@ int gt_scale_foreign_draws(LONG *count);
  * moved and resized during movies.  No-op unless scaling is active. */
 void gt_scale_service_frame_input(void);
 
+/* Called on the window's thread when USER32's modal move/size loop starts
+ * (entering = 1) and ends (entering = 0).  The game's thread is blocked
+ * inside that loop, so the proxy pauses its movie clocks and audio there.
+ * Set before gt_scale_attach. */
+typedef void (*GtScaleModalFn)(int entering);
+void gt_scale_set_modal_callback(GtScaleModalFn fn);
+
 /* Returns 1 when all checks of the pure helpers pass. */
 int gt_scale_selftest(void);
 

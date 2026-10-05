@@ -1,4 +1,4 @@
-# v1.2.1 - copies the 1996 original edition from its CD into a game folder.
+# v1.2.2 - copies the 1996 original edition from its CD into a game folder.
 # The 1996 setup.exe runs the game from the CD, and its QuickTime 2.x is
 # installed system-wide by qt32.exe. This script lays the game out like the
 # 2001 reissue instead: every disc file except the installers, plus the 14

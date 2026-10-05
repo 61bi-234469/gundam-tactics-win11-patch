@@ -1,4 +1,4 @@
-﻿# v1.2.1 - install.bat / uninstall.bat から呼ばれる対話インストーラー。
+﻿# v1.2.2 - install.bat / uninstall.bat から呼ばれる対話インストーラー。
 # 実際のファイル操作は apply.ps1 / revert.ps1 が行う。96版はディスクから
 # 起動する方式なので、import96.ps1 でゲームをフォルダへコピーしてから当てる。
 param(
@@ -262,7 +262,7 @@ $import = $null
 $createdDestination = $false
 $dir = ""
 try {
-    Write-Title "ガンダムタクティクス Windows 11 互換パッチ v1.2.1: $action"
+    Write-Title "ガンダムタクティクス Windows 11 互換パッチ v1.2.2: $action"
 
     $dir = Resolve-GameFolder
     if (-not $dir) { throw [OperationCanceledException]::new("フォルダが選ばれませんでした。") }
