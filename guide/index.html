@@ -106,6 +106,8 @@ th[aria-sort="ascending"]::after{content:" ▲";font-size:9px}
 .readout strong{font-family:var(--mono);font-size:22px;font-weight:600}
 .chart{overflow-x:auto}
 .chart svg{display:block;width:100%;min-width:520px;height:auto}
+#chart{cursor:crosshair;user-select:none;-webkit-user-select:none}
+#chart .drag{cursor:ew-resize;touch-action:none}
 .flow{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;overflow-x:auto}
 .flow pre{margin:0}
 .missions{display:grid;gap:8px}
@@ -210,7 +212,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
   <div class="eyebrow">Gundam Tactics Mobility Fleet0079 · 非公式攻略資料</div>
   <h1>MOBILITY FLEET0079 攻略データ</h1>
   <p class="lead">ゲームの動作を調べて分かった戦闘の計算式、パイロットの能力と成長、命令とAIの動き、キャンペーンの進み方と、全ユニット・全パイロット・全ミッションのデータを、独自の文章・表・図にまとめました。</p>
-  <p class="intro-note">プログラムとデータの調査に基づく資料です。<b>実機のプレイで確認していない項目を含みます</b>（<a href="#sources">付録B</a>）。01版（2001年の復刻版）を基に作成しました。96版（1996年のオリジナル版）はプログラムが同じで、ゲームデータの違いは画像3枚だけです。最終更新 2026-10-03。</p>
+  <p class="intro-note">プログラムとデータの調査に基づく資料です。<b>実機のプレイで確認していない項目を含みます</b>（<a href="#sources">付録B</a>）。01版（2001年の復刻版）を基に作成しました。96版（1996年のオリジナル版）はプログラムが同じで、ゲームデータの違いは画像3枚だけです。最終更新 2026-10-11。</p>
   <nav class="entries" aria-label="目的別の入口">
     <a class="entry" href="#start"><b>初めて遊ぶ</b><span>初出撃までの確認リスト</span></a>
     <a class="entry" href="#missions"><b>今の任務を調べる</b><span>番号・地域で検索、分岐と増援</span></a>
@@ -281,6 +283,26 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
         <li>出撃直後の配分: 出力160未満の艦は機関「出力−60」、防御と主砲が30ずつ。出力160以上の艦は機関100、残りを防御と主砲で半分ずつ。ゲージは満タンで始まります。</li>
       </ul>
     </div>
+  </div>
+  <div class="rule" id="keys">
+    <h3>キー操作</h3>
+    <p>戦闘中、マウスの操作に加えて次のキーが使えます。戦闘は、何かキーを押すか左クリックすると「操作待ち」（一時停止）に入り、命令や表示の切り替えはこの状態で行います。</p>
+    <div class="tbl"><table>
+      <thead><tr><th>キー</th><th class="l">使える場面</th><th class="l">動作</th></tr></thead>
+      <tbody>
+        <tr><td>どれかのキー</td><td class="l">戦闘中</td><td class="l">操作待ち（一時停止）に入る。</td></tr>
+        <tr><td>Space</td><td class="l">操作待ち中</td><td class="l">戦闘を再開する。右クリックと同じ。</td></tr>
+        <tr><td>矢印キー<br>テンキー 8・2・4・6</td><td class="l">操作待ち中</td><td class="l">マップの表示位置を上・下・左・右へ1マスずつ動かす。</td></tr>
+        <tr><td>Home（テンキー 7）<br>Page Up（テンキー 9）<br>End（テンキー 1）<br>Page Down（テンキー 3）</td><td class="l">操作待ち中</td><td class="l">レーダーのパネルを画面の左上・右上・左下・右下の隅へ移す。</td></tr>
+        <tr><td>Alt ＋ Q</td><td class="l">操作待ち中</td><td class="l">戦闘をその場で打ち切る。確認の画面は出ません。</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>Esc と Enter には、割り当てがありません。</b>押しても何も起きません。メニューの決定は、選択してからもう一度クリックします。</li>
+      <li>サイド選択の画面では、Space か右クリックで前の画面に戻ります。ほかにも、選択や設定の画面の多くで、Space は右クリックと同じ扱いになります。</li>
+      <li>オープニングとサイドごとのムービー、タイトル画面の待機、エンディング画面では、どれかのキーかクリックで再生を止めたり、次へ進んだりできます。</li>
+      <li>ウィンドウを閉じる操作（Alt ＋ F4 など）では「終了しますか」の確認が出ます。「はい」を選ぶとゲームを終了します。</li>
+    </ul>
   </div>
 </section>
 
@@ -423,11 +445,28 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
     <h3>戦艦への命令と主砲</h3>
     <ul>
       <li>旗艦の主砲は<b>指定した目標しか撃ちません</b>。僚艦と敵艦は、目標がいなければいちばん近い見えている敵艦を撃ちます。目標が射程外か見えないときは、今の目標の半分未満の距離に見えている敵艦がいる場合だけ、そちらを撃ちます。戦艦の主砲が自動でユニットを狙うことはありません。</li>
-      <li>僚艦は毎ミッション「待機」で始まります。「攻撃」「突撃」は目標へ向かい、見失うと「待機」に戻ります。</li>
-      <li>敵艦・友軍艦のAIは、近くて弱い艦を優先します。輸送艦を優先する処理もありますが、不具合でほぼ働きません（<a href="#bugs">付録A</a>）。「攻撃」は距離50で止まって撃ち合い、「突撃」は近づき続けます。</li>
+      <li>僚艦は毎ミッション「待機」で始まります。命令ごとの動きは下の表のとおりです。</li>
+      <li>敵艦・友軍艦のAIは、近くて弱い艦を優先します。輸送艦を優先する処理もありますが、不具合でほぼ働きません（<a href="#bugs">付録A</a>）。「攻撃」は距離50で止まってユニットを出します（主砲の射程の外なので、相手が近づかない限り撃ちません）。「突撃」は主砲の射程に入るまで近づき、止まって撃ちます。</li>
       <li>敵艦のエネルギー配分は状況に応じて自動で変わります。離れていると機関に振って近づき、距離50（攻撃）/30（突撃）に入ると防御と主砲に振ります。</li>
       <li>組の先頭の艦（4・8・12番艦）が失われると、後続が撤退するよう設定された艦があります。先頭の艦がまだ到着していないときも「失われた」と扱われるため、増援の後続艦が到着直後に撤退することがあります（<a href="#bugs">付録A</a>）。</li>
     </ul>
+    <p>僚艦への命令と、僚艦のユニットの動き:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>命令</th><th class="l">艦の動き</th><th class="l">ユニットを発進させる条件と、ユニットの動き</th><th class="l">ユニットを呼び戻す条件</th></tr></thead>
+      <tbody>
+        <tr><td class="name">攻撃</td><td class="l">目標へ向かい、<b>距離50付近で止まる（主砲の射程の外）</b>。見失うと「待機」</td><td class="l">目標まで距離50未満 → 目標を自動攻撃</td><td class="l">目標まで距離60超</td></tr>
+        <tr><td class="name">突撃</td><td class="l">目標へ向かい、<b>主砲の射程に入ると止まって撃つ</b>。見失うと「待機」</td><td class="l">目標が見えていて距離30未満 → 目標を自動攻撃。そうでなく敵ユニットが距離20未満 → 自艦を護衛</td><td class="l">最寄りの敵ユニットが距離30超</td></tr>
+        <tr><td class="name">護衛</td><td class="l">指定した艦から距離15以内で止まる。見失うと「待機」</td><td class="l">護衛する艦まで距離20以内 → その艦を護衛</td><td class="l">距離20超</td></tr>
+        <tr><td class="name">移動</td><td class="l">指定地点へ向かう</td><td class="l">距離15以内に敵 → 自艦を護衛</td><td class="l">それ以外</td></tr>
+        <tr><td class="name">離脱</td><td class="l">離脱地点へ向かい、戦域から出る</td><td class="l">発進させない</td><td class="l">呼び戻さない</td></tr>
+        <tr><td class="name">待機</td><td class="l">動かない</td><td class="l">距離20未満に敵 → 自艦を護衛</td><td class="l">それ以外</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li>呼び戻すと、発進中のユニットは艦内に戻り、外にいるユニットは帰艦します。</li>
+      <li>主砲の射程は 23.5（サラミス）〜29.2（チベ）です。主砲のない輸送艦は、防御ゲージが満タンになると「攻撃」でも距離50以内で動き続けます。</li>
+    </ul>
+    <div class="tip"><b>ヒント</b> 「攻撃」は<b>ユニットを出撃させやすい</b>命令です。目標まで距離50未満でユニットを発進させ、艦は主砲の射程の外で止まります。「突撃」は<b>主砲が届く範囲へ移動させやすい</b>命令です。射程に入るまで近づき、止まって撃ちます。ユニットで戦わせたいときは「攻撃」、主砲で撃たせたいときは「突撃」を使います。</div>
   </div>
 </section>
 
@@ -886,8 +925,8 @@ flowchart TD
   <div><b>出典</b> 正規に入手した『ガンダムタクティクス MOBILITY FLEET0079』01版（2001年の復刻版）の動作を調べ、分かった仕様と数値を独自の文章・表・図にまとめました。ゲームの画像・文章・プログラム・データファイルは収録していません。ミッション一覧の地図は、粒子と艦の配置座標からこのページが独自に計算して描いた模式図です。ミッション名は、ゲーム内に名称がないため、このページで付けた呼び名です。</div>
   <div><b>権利表記</b> 本資料は非公式のファン資料で、権利者とは関係ありません。作品名・機体名・人物名などの権利は各権利者に帰属します。</div>
   <div><b>対象の版</b> 96版（1996年のオリジナル版）はプログラムが01版と同一で、ゲームデータも画像3枚を除いて同じことを確認しています。96版で攻略内容をプレイして確かめたわけではありません。</div>
-  <div><b>更新履歴</b> 2026-10-03: パイロット名鑑に加入タイミングの絞り込みを追加。斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
-  <div><b>未確認事項</b> 実機での動作確認は行っていません。1カウントの実時間、分岐条件「敵の離脱なし」の実際の挙動、戦艦の護衛命令の細部（コード上の不具合らしき箇所あり）は未確定です。</div>
+  <div><b>更新履歴</b> 2026-10-11: 5章に僚艦への命令とユニットの出し入れの表を追加。戦艦の「攻撃」は主砲の射程外の距離50で止まることを追記。付録Aのユニットの「護衛」の不具合を具体化。 2026-10-04: 1章に戦闘中のキー操作を追加。 2026-10-03: パイロット名鑑に加入タイミングの絞り込みを追加。斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
+  <div><b>未確認事項</b> 実機での動作確認は行っていません。1カウントの実時間、分岐条件「敵の離脱なし」の実際の挙動は未確定です。</div>
   </div>
 </section>
 </div>
@@ -1493,7 +1532,7 @@ const BUGS=[
  ["仕様の穴","Alt+Q を押すと、タイトルに戻らずゲームが終了する。","前回のセーブ以降の進行は失われる。","コード確認"],
  ["表示のみ","パイロットの SPEC（接近戦・遠隔戦・対艦戦）と SKILL（NOVICE〜TOP ACE）は表示されるだけで、計算には使われない。","SPECで配置を決める必要はない。","コード確認"],
  ["表示のみ","僚艦・友軍・敵のユニットに付く「自動攻撃」は、命令欄では「遠隔攻撃」と表示される。","画面の命令表示と実際の動きが違うことがある。","コード確認"],
- ["バグの疑い","ユニットの「護衛」命令で、護衛する艦から距離40より離れると、艦ではなく「艦と同じ番号のユニット」の位置へ向かう。","護衛させるユニットは艦から離れすぎないように置く。","コード確認・解釈"],
+ ["バグの疑い","ユニットの「護衛」で、護衛する艦から距離40より離れていて、見えている敵が艦から距離20以内にいないと、艦へ戻らず旗艦のユニットへ向かう（旗艦のユニットは旗艦の1機目、僚艦1〜3のユニットは旗艦の2〜4機目、友軍のユニットは5〜8機目、敵のユニットは僚艦などのユニットへ）。正しく動いたとしても、戻り先は護衛する艦ではなく自分の母艦になっている。見えている敵が1体もいないときは、下の「その場で止まる」不具合のほうが起きる。","護衛させるユニットは、護衛する艦から40以上離さない。","コード確認"],
  ["バグの疑い","AIの艦の「突撃」で、近くに敵がいるかの判定が、艦ではなく艦と同じ番号のユニットからの距離で行われている。","敵艦のエネルギー配分が状況に合わないことがある。","コード確認・解釈"],
  ["バグの疑い","AIの艦の「護衛」は護衛相手を選ぶ処理が常に0を返し、すぐ「突撃」に変わる。","護衛役の敵艦も前に出てくる。","コード確認"],
  ["バグの疑い","寄港時のパイロット増員は、候補がすでに名簿にいるか、戦死しているかを確認しない。ジオンでは同じルート上で候補が重なるミッションがある（M101 と M109 のアラン チャンバーズ、M101 と M110 のジョージ キューカー）。","同じパイロットが二重に加わる可能性がある。","コード確認・解釈"],
@@ -1770,13 +1809,13 @@ function draw(){
     T_("r-melee", u.me||"なし");
     T_("r-ranged", inRange?Math.round(r):"射程外");
     T_("r-best", inRange?"主砲（隣接しても主砲）":"届かない");
-    T_("calc-note",`戦艦同士は隣接しても主砲で撃ち合います。近接武装は、隣接して攻撃してきたユニットを先に迎撃するためだけに使われます（迎撃はパイロットの (操縦能力 + NT LEVEL) ÷ 150 の確率でかわされます）。艦は射程上限ちょうどの距離からも撃てます。乱数と防御ゲージを除いた攻撃力です。縦線は現在の距離、横の破線は迎撃力です。`);
+    T_("calc-note",`戦艦同士は隣接しても主砲で撃ち合います。近接武装は、隣接して攻撃してきたユニットを先に迎撃するためだけに使われます（迎撃はパイロットの (操縦能力 + NT LEVEL) ÷ 150 の確率でかわされます）。艦は射程上限ちょうどの距離からも撃てます。乱数と防御ゲージを除いた攻撃力です。縦線は現在の距離（グラフ上でドラッグ・クリックして動かせます）、横の破線は迎撃力です。`);
   } else {
     T_("r-melee-l","近接攻撃（隣接時）"); T_("r-ranged-l","遠隔攻撃（この距離）"); T_("r-best-l","強いのは");
     T_("r-melee", u.me||"—");
     T_("r-ranged", adj?"— (隣接)":inRange?Math.round(r):"射程外");
     T_("r-best", adj?"近接攻撃（隣接）":!inRange?"射程外（撃てない）":(r>u.me?"遠隔攻撃":r<u.me?"近接攻撃":"同じ"));
-    T_("calc-note",`乱数と防御力を除いた攻撃力です。縦線は現在の距離、横の破線は近接攻撃値です。ユニットは射程上限ちょうどの距離からは撃てません。格子上で撃てるいちばん遠いマスは距離 ${f2(far.d)}（横${far.a}・縦${far.b}）です。${!adj&&inRange&&d>far.d+0.005?"今の距離に当たるマスはありません（連続値での参考計算）。":""}`);
+    T_("calc-note",`乱数と防御力を除いた攻撃力です。縦線は現在の距離（グラフ上でドラッグ・クリックして動かせます）、横の破線は近接攻撃値です。ユニットは射程上限ちょうどの距離からは撃てません。格子上で撃てるいちばん遠いマスは距離 ${f2(far.d)}（横${far.a}・縦${far.b}）です。${!adj&&inRange&&d>far.d+0.005?"今の距離に当たるマスはありません（連続値での参考計算）。":""}`);
   }
   const W=640,H=260,L=48,Rm=16,T=16,B=36, top=Math.max(u.ra,u.me)*1.1;
   const x=v=>L+(v/max)*(W-L-Rm), y=v=>T+(1-v/top)*(H-T-B);
@@ -1796,9 +1835,32 @@ function draw(){
   if(!ship) s+=`<circle cx="${x(max)}" cy="${y(rangedAt(u,max))}" r="4" fill="${css("--paper")}" stroke="${acc}" stroke-width="2"><title>射程上限ちょうどからは撃てない</title></circle>`;
   s+=`<line x1="${x(d)}" x2="${x(d)}" y1="${T}" y2="${H-B}" stroke="${mut}"/>`;
   if((ship||!adj)&&inRange) s+=`<circle cx="${x(d)}" cy="${y(r)}" r="5" fill="${acc}" stroke="${css("--paper")}" stroke-width="2"/>`;
+  // wide transparent grip over the distance line and point; drawn last so it receives the pointer
+  s+=`<rect class="drag" x="${x(d)-14}" y="${T}" width="28" height="${H-T-B}" fill="transparent"><title>ドラッグで距離を変える</title></rect>`;
   document.getElementById("chart").innerHTML=s;
 }
 sel.addEventListener("change",draw); rng.addEventListener("input",draw); linkNum("dist",draw);
+// drag the distance line/point, or click/tap anywhere on the plot, to set the distance
+(()=>{
+  const svg=document.getElementById("chart"); let dragId=null;
+  const setFromX=e=>{
+    const max=Math.sqrt(ALL[+sel.value].R), b=svg.getBoundingClientRect();
+    const vx=(e.clientX-b.left)*640/b.width, v=(vx-48)/(640-48-16)*max;
+    rng.value=Math.max(+rng.min,Math.min(+rng.max,Math.round(v*100)/100));
+    draw();
+    simEl("dist-n").value=rng.value;  // after draw() re-clamps; syncNum skips the box while it has focus
+  };
+  svg.addEventListener("pointerdown",e=>{
+    // touch starts a drag only on the grip, so the chart can still be scrolled sideways on phones
+    if(e.pointerType==="touch"&&!e.target.classList.contains("drag")) return;
+    if(e.button>0) return;
+    dragId=e.pointerId; try{svg.setPointerCapture(dragId);}catch(_){} setFromX(e); e.preventDefault();
+  });
+  svg.addEventListener("pointermove",e=>{ if(e.pointerId===dragId) setFromX(e); });
+  const end=e=>{ if(e.pointerId===dragId) dragId=null; };
+  svg.addEventListener("pointerup",end); svg.addEventListener("pointercancel",end);
+  svg.addEventListener("click",e=>{ if(dragId===null&&!e.target.classList.contains("drag")) setFromX(e); });
+})();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 missionMax(); msTable(); shipTable(); growthTable(); fillJoinFilter(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw(); updateSrc();
