@@ -22,6 +22,7 @@
 
 #include "controller_shared.h"
 #include "display_scale.h"
+#include "startup_diag.h"
 #include "movdec.h"
 
 static HMODULE g_real = NULL;
@@ -1043,10 +1044,303 @@ static int midi_open_is_sequencer_file(DWORD_PTR flags,
                           lstrcmpiA(name + length - 4, ".rmi") == 0);
 }
 
+/* A sequencer that has played and is then rewound with MCI_SEEK_TO_START does
+ * not send the note-ons at tick 0 again on Windows 11's mciseq.dll; the next
+ * notes heard are those after them (M07GM: 8 note-ons, the first 200 ms).
+ * MCI_FROM 0 and a delayed first event do not help; a freshly opened device
+ * plays them (work/tools/MIDI_LOOP_INVESTIGATION.md).  So when the game
+ * rewinds a BGM device that has played (FUN_00421600 on MCI_MODE_STOP:
+ * SEEK_TO_START, then PLAY with NOTIFY), the proxy closes it and opens the
+ * same file again.  The new device normally gets the same ID; otherwise the
+ * game's ID is translated to the new one until the game closes it.  If the
+ * open fails, the device stays "dead" under the game's ID and the open is
+ * retried on the game's next command to it (at most once a second). */
+typedef struct MidiRestartDevice {
+    MCIDEVICEID game_id; /* 0: free slot */
+    MCIDEVICEID real_id; /* 0 while dead */
+    int played;
+    DWORD last_revive;
+    char type[32];
+    char element[MAX_PATH];
+} MidiRestartDevice;
+
+enum { MIDI_RESTART_CAPACITY = 4 };
+enum { MIDI_REVIVE_INTERVAL_MS = 1000 };
+/* Game-side IDs handed out when a new device gets a real ID that the game
+ * still uses for a reopened one; never a real MCI device ID in practice. */
+enum { MIDI_PUBLIC_ID_FIRST = 0xF000 };
+static MidiRestartDevice g_midi_restart[MIDI_RESTART_CAPACITY];
+static int g_midi_restart_enabled = 0;
+static MCIDEVICEID g_midi_next_public = MIDI_PUBLIC_ID_FIRST;
+
+static double midi_elapsed_ms(LARGE_INTEGER start) {
+    LARGE_INTEGER now;
+    LARGE_INTEGER frequency;
+    QueryPerformanceCounter(&now);
+    if (!QueryPerformanceFrequency(&frequency) || !frequency.QuadPart)
+        return 0.0;
+    return (double)(now.QuadPart - start.QuadPart) * 1000.0 /
+           (double)frequency.QuadPart;
+}
+
+/* MCI calls for the BGM device all come from the game's thread, so the table
+ * needs no lock. */
+static MidiRestartDevice *midi_restart_find(MCIDEVICEID game_id) {
+    if (!game_id) return NULL;
+    for (int i = 0; i < MIDI_RESTART_CAPACITY; i++)
+        if (g_midi_restart[i].game_id == game_id) return &g_midi_restart[i];
+    return NULL;
+}
+
+/* Remembers a sequencer the game opened with a device type name and a file
+ * name only (as gundam.exe does); anything else is left alone.  When the
+ * new real ID is one the game still uses for a reopened device, the game is
+ * given a distinct public ID (written to its MCI_OPEN_PARMS) instead. */
+static void midi_restart_track(MCIDEVICEID id, DWORD_PTR flags,
+                               const MCI_OPEN_PARMSA *open,
+                               const char *element,
+                               MCI_OPEN_PARMSA *game_open) {
+    MidiRestartDevice *slot = NULL;
+    MCIDEVICEID public_id = id;
+    char buf[80];
+    int written;
+    int tracked = g_midi_restart_enabled && id && element &&
+        open->lpstrDeviceType &&
+        (flags & ~(DWORD_PTR)MCI_WAIT) == (MCI_OPEN_TYPE | MCI_OPEN_ELEMENT) &&
+        lstrcmpiA(open->lpstrDeviceType, "sequencer") == 0 &&
+        strlen(element) < sizeof(slot->element);
+    if (midi_restart_find(id)) {
+        if (!tracked) {
+            log_text("midi_restart\tresult=id_collision_untracked\n");
+            return;
+        }
+        do {
+            public_id = g_midi_next_public++;
+            if (g_midi_next_public < MIDI_PUBLIC_ID_FIRST)
+                g_midi_next_public = MIDI_PUBLIC_ID_FIRST;
+        } while (midi_restart_find(public_id));
+    }
+    if (!tracked) return;
+    for (int i = 0; i < MIDI_RESTART_CAPACITY && !slot; i++)
+        if (!g_midi_restart[i].game_id) slot = &g_midi_restart[i];
+    if (!slot) {
+        /* Not tracked: with a colliding ID the game could not reach the new
+         * device separately, so it keeps the real ID and the log says so. */
+        if (public_id != id) log_text("midi_restart\tresult=table_full\n");
+        return;
+    }
+    if (public_id != id) {
+        game_open->wDeviceID = public_id;
+        written = snprintf(buf, sizeof(buf),
+                           "midi_restart\tpublic_id=%u\treal=%u\n",
+                           (unsigned)public_id, (unsigned)id);
+        if (written > 0) log_text(buf);
+    }
+    slot->game_id = public_id;
+    slot->real_id = id;
+    slot->played = 0;
+    slot->last_revive = 0;
+    lstrcpynA(slot->type, "sequencer", sizeof(slot->type));
+    strcpy(slot->element, element);
+}
+
+/* mciseq.dll waits for its stream thread with Sleep(4) polls: a close and an
+ * open of M07GM take hundreds of such polls, 0.7 s in the game and seconds
+ * at the default timer resolution, during which the game thread and the
+ * music stop.  While the proxy reopens a device (and only then, for at most
+ * MIDI_FAST_SLEEP_MAX_MS) its Sleep(4) only yields the processor: the open
+ * takes about 1-10 ms.  mciseq.dll is kept loaded so the hook survives the
+ * close of its last device. */
+typedef VOID (WINAPI *PFN_Sleep)(DWORD);
+enum { MIDI_FAST_SLEEP_MAX_MS = 50 };
+static PFN_Sleep volatile p_mciseq_sleep = NULL;
+static volatile LONG g_mciseq_fast_sleep = 0;
+static LONGLONG volatile g_mciseq_fast_until = 0;
+static int g_mciseq_hook_state = 0; /* 0: not tried, 1: hooked, -1: failed */
+
+static int patch_mci_iat_entry(BYTE *slot, const char *name,
+                               void *replacement, void **original);
+
+static VOID WINAPI mciseq_sleep_hook(DWORD ms) {
+    if (ms == 4 && g_mciseq_fast_sleep) {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        if (now.QuadPart < g_mciseq_fast_until) {
+            /* SwitchToThread also runs a lower-priority thread that is
+             * ready on this processor (Sleep(0) would not). */
+            if (!SwitchToThread()) Sleep(0);
+            return;
+        }
+    }
+    p_mciseq_sleep(ms);
+}
+
+/* IAT slot of the named import of module, from any DLL. */
+static BYTE *find_import_slot(HMODULE module, const char *name) {
+    BYTE *base = (BYTE *)module;
+    PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)base;
+    PIMAGE_NT_HEADERS32 nt;
+    IMAGE_DATA_DIRECTORY directory;
+    PIMAGE_IMPORT_DESCRIPTOR imports;
+    if (!module || dos->e_magic != IMAGE_DOS_SIGNATURE) return NULL;
+    nt = (PIMAGE_NT_HEADERS32)(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE ||
+        nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) return NULL;
+    directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!directory.VirtualAddress || !directory.Size) return NULL;
+    for (imports = (PIMAGE_IMPORT_DESCRIPTOR)(base + directory.VirtualAddress);
+         imports->Name; imports++) {
+        DWORD *names;
+        DWORD *slots;
+        if (!imports->OriginalFirstThunk) continue;
+        names = (DWORD *)(base + imports->OriginalFirstThunk);
+        slots = (DWORD *)(base + imports->FirstThunk);
+        for (; *names; names++, slots++) {
+            if (IMAGE_SNAP_BY_ORDINAL32(*names)) continue;
+            if (lstrcmpA((const char *)((IMAGE_IMPORT_BY_NAME *)(base + *names))
+                             ->Name, name) == 0)
+                return (BYTE *)slots;
+        }
+    }
+    return NULL;
+}
+
+static int midi_restart_prepare(void) {
+    char path[MAX_PATH];
+    UINT length;
+    HMODULE seq;
+    BYTE *slot;
+    if (g_mciseq_hook_state) return g_mciseq_hook_state > 0;
+    g_mciseq_hook_state = -1;
+    length = GetSystemDirectoryA(path, sizeof(path));
+    if (!length || length + sizeof("\\mciseq.dll") > sizeof(path)) return 0;
+    strcat(path, "\\mciseq.dll");
+    seq = LoadLibraryA(path);
+    if (!seq) {
+        log_text("midi_restart\tresult=mciseq_not_loaded\n");
+        return 0;
+    }
+    slot = find_import_slot(seq, "Sleep");
+    if (!slot || !*(DWORD *)slot) {
+        log_text("midi_restart\tresult=sleep_import_missing\n");
+        FreeLibrary(seq);
+        return 0;
+    }
+    /* The original must be in place before the hook is visible to
+     * mciseq's own threads. */
+    p_mciseq_sleep = (PFN_Sleep)(uintptr_t)*(DWORD *)slot;
+    MemoryBarrier();
+    if (patch_mci_iat_entry(slot, "mciseq!Sleep",
+                            (void *)(uintptr_t)mciseq_sleep_hook, NULL) <= 0) {
+        /* The slot may hold the hook (with a restore record) even on
+         * failure, so mciseq.dll stays loaded either way. */
+        log_text("midi_restart\tresult=sleep_hook_failed\n");
+        return 0;
+    }
+    g_mciseq_hook_state = 1;
+    return 1;
+}
+
+static void midi_fast_sleep_begin(void) {
+    LARGE_INTEGER now;
+    LARGE_INTEGER frequency;
+    QueryPerformanceCounter(&now);
+    if (!QueryPerformanceFrequency(&frequency)) frequency.QuadPart = 0;
+    g_mciseq_fast_until = now.QuadPart +
+        frequency.QuadPart * MIDI_FAST_SLEEP_MAX_MS / 1000;
+    InterlockedExchange(&g_mciseq_fast_sleep, 1);
+}
+
+static void midi_fast_sleep_end(void) {
+    InterlockedExchange(&g_mciseq_fast_sleep, 0);
+}
+
+/* Opens the device's file; on success it becomes the device's real ID. */
+static MCIERROR midi_restart_open(MidiRestartDevice *dev) {
+    MCI_OPEN_PARMSA open;
+    MCIERROR result;
+    memset(&open, 0, sizeof(open));
+    open.lpstrDeviceType = dev->type;
+    open.lpstrElementName = dev->element;
+    result = p_real_mciSendCommandA(
+        0, MCI_OPEN, MCI_OPEN_TYPE | MCI_OPEN_ELEMENT | MCI_WAIT,
+        (DWORD_PTR)&open);
+    if (result == 0) {
+        dev->real_id = open.wDeviceID;
+        dev->played = 0;
+    }
+    return result;
+}
+
+/* For a device whose reopen failed: tries the open again, at most once per
+ * MIDI_REVIVE_INTERVAL_MS.  Returns 0 when the device is alive. */
+static MCIERROR midi_restart_revive(MidiRestartDevice *dev) {
+    MCIERROR result;
+    DWORD now = GetTickCount();
+    char buf[96];
+    int written;
+    if (dev->real_id) return 0;
+    if (dev->last_revive &&
+        (DWORD)(now - dev->last_revive) < MIDI_REVIVE_INTERVAL_MS)
+        return MCIERR_DEVICE_NOT_READY;
+    dev->last_revive = now ? now : 1;
+    midi_fast_sleep_begin();
+    result = midi_restart_open(dev);
+    midi_fast_sleep_end();
+    written = snprintf(buf, sizeof(buf), "midi_restart\trevive\tdev=%u\t"
+                       "real=%u\tret=%lu\n", (unsigned)dev->game_id,
+                       (unsigned)dev->real_id, (unsigned long)result);
+    if (written > 0) log_text(buf);
+    return result;
+}
+
+/* Closes the device and opens its file again.  Returns 0 when the device was
+ * reopened.  When mciseq.dll could not be hooked or the close fails, the
+ * device is untouched and the caller rewinds it as before (*closed = 0).
+ * When the open fails twice the device is left dead (real_id 0, revived on
+ * a later command) and the error is returned. */
+static MCIERROR midi_restart_reopen(MidiRestartDevice *dev, int *closed) {
+    MCIDEVICEID old_id = dev->real_id;
+    MCIERROR result;
+    LARGE_INTEGER start;
+    double close_ms;
+    char buf[160];
+    int written;
+    int attempts = 0;
+
+    *closed = 0;
+    if (!old_id || !midi_restart_prepare()) return MCIERR_UNSUPPORTED_FUNCTION;
+    QueryPerformanceCounter(&start);
+    midi_fast_sleep_begin();
+    result = p_real_mciSendCommandA(old_id, MCI_CLOSE, MCI_WAIT, 0);
+    close_ms = midi_elapsed_ms(start);
+    if (result == 0) {
+        *closed = 1;
+        dev->real_id = 0;
+        dev->played = 0;
+        do {
+            result = midi_restart_open(dev);
+        } while (result != 0 && ++attempts < 2);
+    }
+    midi_fast_sleep_end();
+    if (*closed && result != 0) dev->last_revive = GetTickCount() | 1;
+    written = snprintf(buf, sizeof(buf),
+                       "midi_restart\tdev=%u\treal=%u->%u\tclose_ret=%lu\t"
+                       "ret=%lu\tclose_ms=%.1f\ttotal_ms=%.1f\n",
+                       (unsigned)dev->game_id, (unsigned)old_id,
+                       (unsigned)dev->real_id,
+                       (unsigned long)(*closed ? 0 : result),
+                       (unsigned long)result, close_ms, midi_elapsed_ms(start));
+    if (written > 0) log_text(buf);
+    return result;
+}
+
 /* Opens the trimmed copy in place of the game's file.  Returns 1 when that
- * open succeeded; otherwise the caller performs the game's original open. */
+ * open succeeded; otherwise the caller performs the game's original open.
+ * opened receives the file that was opened. */
 static int midi_loop_open(DWORD_PTR flags, DWORD_PTR param,
-                          MCIERROR *result) {
+                          MCIERROR *result, char *opened,
+                          size_t opened_size) {
     MCI_OPEN_PARMSA open;
     MCI_OPEN_PARMSA *game_open = (MCI_OPEN_PARMSA *)(uintptr_t)param;
     char element[MAX_PATH];
@@ -1114,6 +1408,7 @@ static int midi_loop_open(DWORD_PTR flags, DWORD_PTR param,
     if (written > 0) log_text(buf);
     if (*result != 0) return 0;
     game_open->wDeviceID = open.wDeviceID;
+    lstrcpynA(opened, copy_path, (int)opened_size);
     return 1;
 }
 
@@ -1125,20 +1420,67 @@ static MCIERROR WINAPI trace_mciSendCommandA(MCIDEVICEID device, UINT command,
     DWORD mode = 0;
     int status_mode_valid = 0;
     int fix = g_midi_loop_fix_enabled && p_real_mciSendCommandA;
+    /* The game's ID (callbacks are kept under it); device becomes the real
+     * one when a reopen moved it. */
+    MCIDEVICEID game_device = device;
+    MidiRestartDevice *restart = fix ? midi_restart_find(device) : NULL;
+    char opened[MAX_PATH];
+    int handled = 0;
 
-    if (!(fix && command == MCI_OPEN && midi_loop_open(flags, param,
-                                                        &result))) {
+    if (restart && !restart->real_id) {
+        /* Dead after a failed reopen: a close just forgets it; anything
+         * else first tries to open the file again. */
+        if (command == MCI_CLOSE) {
+            restart->game_id = 0;
+            midi_remember_play_callback(game_device, 0);
+            log_mci_call(device, command, flags, 0, 0, 0);
+            return 0;
+        }
+        result = midi_restart_revive(restart);
+        if (result != 0) {
+            log_mci_call(device, command, flags, result, 0, 0);
+            return result;
+        }
+    }
+    if (restart) device = restart->real_id;
+    opened[0] = '\0';
+    if (fix && command == MCI_OPEN)
+        handled = midi_loop_open(flags, param, &result, opened,
+                                 sizeof(opened));
+    if (!handled && restart && restart->played && command == MCI_SEEK &&
+        (flags & ~(DWORD_PTR)MCI_WAIT) == MCI_SEEK_TO_START) {
+        int closed;
+        result = midi_restart_reopen(restart, &closed);
+        handled = closed;
+        if (closed && result == 0) device = restart->real_id;
+        else if (!closed) result = 0; /* rewind below as before */
+    }
+    if (!handled) {
         result = p_real_mciSendCommandA ?
             p_real_mciSendCommandA(device, command, flags, param) :
             (MCIERROR)MCIERR_DRIVER_INTERNAL;
     }
+    if (fix && result == 0 && command == MCI_OPEN) {
+        MCI_OPEN_PARMSA open;
+        if (copy_readable_memory((const void *)(uintptr_t)param, &open,
+                                 sizeof(open)) == sizeof(open)) {
+            if (!opened[0] && midi_open_is_sequencer_file(flags, &open) &&
+                open.lpstrElementName)
+                lstrcpynA(opened, open.lpstrElementName, sizeof(opened));
+            if (opened[0])
+                midi_restart_track(open.wDeviceID, flags, &open, opened,
+                                   (MCI_OPEN_PARMSA *)(uintptr_t)param);
+        }
+    }
+    if (restart && result == 0 && command == MCI_PLAY) restart->played = 1;
     if (fix && result == 0 && command == MCI_PLAY && (flags & MCI_NOTIFY)) {
         MCI_GENERIC_PARMS generic;
         if (copy_readable_memory((const void *)(uintptr_t)param, &generic,
                                  sizeof(generic)) == sizeof(generic))
-            midi_remember_play_callback(device, generic.dwCallback);
+            midi_remember_play_callback(game_device, generic.dwCallback);
     } else if (fix && result == 0 && command == MCI_CLOSE) {
-        midi_remember_play_callback(device, 0);
+        midi_remember_play_callback(game_device, 0);
+        if (restart) restart->game_id = 0;
     }
     /* The game pauses BGM on minimize (WM_SIZE) and resumes it from the poll,
      * but Windows 11's sequencer rejects MCI_RESUME; a plain MCI_PLAY
@@ -1160,16 +1502,29 @@ static MCIERROR WINAPI trace_mciSendCommandA(MCIDEVICEID device, UINT command,
                                    (DWORD_PTR)&length) == 0 &&
             length.dwReturn != 0 && position.dwReturn >= length.dwReturn) {
             MCI_SEEK_PARMS seek;
-            memset(&seek, 0, sizeof(seek));
-            p_real_mciSendCommandA(device, MCI_SEEK, MCI_SEEK_TO_START,
-                                   (DWORD_PTR)&seek);
+            int closed = 0;
+            MCIERROR reopened = MCIERR_UNSUPPORTED_FUNCTION;
+            if (restart && restart->played)
+                reopened = midi_restart_reopen(restart, &closed);
+            if (closed && reopened == 0) {
+                device = restart->real_id;
+            } else if (closed) {
+                result = reopened; /* dead now: nothing to play */
+            } else {
+                memset(&seek, 0, sizeof(seek));
+                p_real_mciSendCommandA(device, MCI_SEEK, MCI_SEEK_TO_START,
+                                       (DWORD_PTR)&seek);
+            }
         }
-        memset(&play, 0, sizeof(play));
-        play.dwCallback = midi_play_callback(device);
-        result = p_real_mciSendCommandA(
-            device, MCI_PLAY,
-            (flags & MCI_WAIT) | (play.dwCallback ? MCI_NOTIFY : 0),
-            (DWORD_PTR)&play);
+        if (!restart || restart->real_id) {
+            memset(&play, 0, sizeof(play));
+            play.dwCallback = midi_play_callback(game_device);
+            result = p_real_mciSendCommandA(
+                device, MCI_PLAY,
+                (flags & MCI_WAIT) | (play.dwCallback ? MCI_NOTIFY : 0),
+                (DWORD_PTR)&play);
+            if (restart && result == 0) restart->played = 1;
+        }
         if (g_mci_trace_enabled) {
             char buf[128];
             int written = snprintf(buf, sizeof(buf),
@@ -3927,6 +4282,8 @@ static uint32_t handled_result(uint32_t *f, uint32_t result) {
     return 1;
 }
 
+static int g_early_scale_tried;
+
 uint32_t __cdecl compat_dispatch(uint32_t *f) {
     uint32_t frame[16];
     uint32_t sel;
@@ -3945,6 +4302,11 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
     arg2 = frame[14];
     arg3 = frame[15];
 
+    gt_diag_selector(sel);
+    if (!g_early_scale_tried) {
+        g_early_scale_tried = 1;
+        if (gt_scale_adopt_early()) gt_diag_note("scale_adopted_early");
+    }
     log_selector_probe(sel, frame);
     CompatThreadState *state = get_thread_state();
     if (g_selftest_requested && g_mci_trace_enabled &&
@@ -4564,6 +4926,19 @@ static int midi_loop_fix_requested(HMODULE self) {
     return GetPrivateProfileIntA("audio", "midi_loop_fix", 1, ini_path) != 0;
 }
 
+static int midi_restart_requested(HMODULE self) {
+    char value[16];
+    char ini_path[MAX_PATH];
+    DWORD length = GetEnvironmentVariableA("QTIM_MIDI_RESTART_REOPEN", value,
+                                           sizeof(value));
+    if (length && length < sizeof(value))
+        return !(value[0] == '0' || value[0] == 'n' || value[0] == 'N' ||
+                 value[0] == 'f' || value[0] == 'F');
+    if (!build_trace_ini_path(self, ini_path, sizeof(ini_path))) return 1;
+    return GetPrivateProfileIntA("audio", "midi_restart_reopen", 1,
+                                 ini_path) != 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_tls_index = TlsAlloc();
@@ -4652,6 +5027,10 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
                 log_text(g_midi_loop_fix_enabled ? "midi_loop_fix=on\n" :
                          "midi_loop_fix=off\treason=disabled\n");
             }
+            g_midi_restart_enabled = g_midi_loop_fix_enabled &&
+                midi_restart_requested(self);
+            log_text(g_midi_restart_enabled ? "midi_restart_reopen=on\n" :
+                     "midi_restart_reopen=off\n");
         } else {
             log_text("midi_loop_fix=off\treason=disabled\n");
         }
@@ -4666,6 +5045,10 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
                                                  sizeof(ini_path))
                                 ? ini_path : NULL,
                             g_real, log_text);
+            gt_diag_attach(build_trace_ini_path(self, ini_path,
+                                                sizeof(ini_path))
+                               ? ini_path : NULL,
+                           g_real);
         }
         log_text(g_trace_enabled ? "qtim_compat_proxy attached\n" : "qtim_compat_proxy attached (trace off)\n");
     } else if (reason == DLL_THREAD_DETACH) {
@@ -4673,6 +5056,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
     } else if (reason == DLL_PROCESS_DETACH) {
         /* Scaling hooks chain on top of the input hooks: undo them first. */
         gt_scale_detach(reserved != NULL);
+        gt_diag_detach(reserved != NULL);
         if (g_input_iat_hook_count && !restore_input_iat_hooks()) {
             log_text("FATAL input IAT hook restoration failed\n");
         }

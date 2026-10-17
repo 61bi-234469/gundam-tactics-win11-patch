@@ -46,7 +46,7 @@ def main() -> int:
     env["PATH"] = mingw_bin + os.pathsep + env.get("PATH", "")
     qtim_cmd = common + [
         "-o", "QTIM32.dll",
-        "qtim_compat_proxy.c", "movdec.c", "display_scale.c",
+        "qtim_compat_proxy.c", "movdec.c", "display_scale.c", "startup_diag.c",
         "qtim_compat_proxy.def",
         "-luser32", "-lgdi32", "-lwinmm",
     ]

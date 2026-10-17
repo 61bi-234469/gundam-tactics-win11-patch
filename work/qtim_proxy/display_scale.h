@@ -15,7 +15,10 @@ typedef void (*GtScaleLogFn)(const char *line);
 /* Reads [display] from ini_path (and QTIM_DISPLAY_SCALE / QTIM_DISPLAY_FILTER)
  * and, unless scaling is off, installs the IAT hooks.  qt_module is the stock
  * QuickTime DLL.  Returns 1 when scaling is active.  Safe to call from
- * DllMain: window setup is deferred to the first hooked call. */
+ * DllMain: window setup is deferred to the first hooked call.
+ * [display] fade_ms (QTIM_FADE_MS, default 50, 0 = original) paces the
+ * game's palette fade; with scaling off only gundam.exe's StretchDIBits is
+ * hooked for it. */
 int gt_scale_attach(const char *ini_path, HMODULE qt_module, GtScaleLogFn log);
 
 /* Undoes the IAT hooks and the window subclass.  Must run before any other
@@ -43,6 +46,13 @@ void gt_scale_service_frame_input(void);
  * Set before gt_scale_attach. */
 typedef void (*GtScaleModalFn)(int entering);
 void gt_scale_set_modal_callback(GtScaleModalFn fn);
+
+/* Sets up scaling on the calling thread's "Gundam" window now instead of at
+ * its first hooked DC or message call.  The proxy calls it on the first
+ * QuickTime selector, so the window is enlarged before QuickTime's
+ * initialisation (which can take seconds) rather than after it.  Returns 1
+ * when the window was adopted by this call. */
+int gt_scale_adopt_early(void);
 
 /* Returns 1 when all checks of the pure helpers pass. */
 int gt_scale_selftest(void);

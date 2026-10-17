@@ -155,7 +155,27 @@ loop's length: the movie resumes at the frame where it stopped, in step with
 its sound, instead of jumping ahead (trace `modal_loop enter/exit`).
 Controller-less GetMoviePict movies take their time from the game and are
 not covered; none of the battle movies use that path.
-`[display] scale=off` (or `QTIM_DISPLAY_SCALE=off`) installs nothing.
+`[display] scale=off` (or `QTIM_DISPLAY_SCALE=off`) installs nothing except
+the fade pacing hook below.
+
+Fade pacing (experimental): the game's palette fade (`FUN_004090F0`) draws
+its 50 steps (51 with exe Phase 6) with no wait, so a fade finished in a few
+ms and, with scaling on, was mostly merged into one present. The executable's
+`StretchDIBits` hook recognises a fade step by its return address:
+`0x00409289`, or `0x00438561` with exe Phase 3 (b), whose code cave makes the
+call and then jumps back to `0x00409289`. The cave is accepted only after the
+`jmp` there is verified when the proxy loads. It spaces the steps so that 50 of them take
+`[display] fade_ms` (`QTIM_FADE_MS`, default 50, `0` = original, max 2000)
+and presents each step when scaling is on. The schedule is anchored at the
+first step (high-resolution waitable timer, then a short yield), and it restarts
+after a pause longer than 100 ms plus one step (trace `display_scale fade
+steps=N ms=M`, logged when the next fade starts). With scaling off, only
+that one IAT entry is hooked.
+The window is adopted on the first QuickTime selector (0x39, the runtime's
+initialisation), before that call is forwarded: the runtime's initialisation
+opens and closes the MIDI mapper (about 230 ms here, occasionally seconds),
+and the window used to stay at 576x416 until it returned (trace
+`display_scale adopted_early`).
 `work/tools/qtdraw_probe` logs the original runtime's drawing calls.
 
 The game accepts input only when `GetMessageTime()` is strictly newer than
@@ -171,6 +191,15 @@ default (`input_fix=on hooks=3` in the trace); `QTIM_INPUT_FIX=0` or
 `[input] click_fix=0` disables it. `work/tools/click_gate_test` reproduces
 the game's gate (`--synth N`, optionally `--proxy QTIM32.DLL` run from the
 game folder).
+
+Startup timing (off by default): `[diag] startup=1` (or
+`QTIM_DIAG_STARTUP=1`) appends to `qtim_startup.log` next to the INI the
+first-call time of the first 12 selectors (`prev_to_this_ms` after 0x39 is
+the whole runtime initialisation) and the duration and caller of the
+runtime's `midiOut*`/`waveOut*` device calls, `CreateDCA`/`CreateICA`,
+`GetProfileStringA` and `LoadLibraryA` (all calls during startup, then only
+those of 100 ms or more; at most 400 lines per launch). The hooks only time
+and forward.
 
 For a reproduced silent-BGM case, enable the normal trace and the opt-in MCI
 trace together:
@@ -228,6 +257,22 @@ python .\work\qtim_proxy\build.py
 python .\work\qtim_proxy\deploy.py --game-dir .\run\GT01
 python .\work\tools\verify_launch.py --game-dir .\run\GT01 --wait-seconds 8
 ```
+
+BGM loop restart (experimental): on Windows 11, a sequencer that has played
+and is rewound with `MCI_SEEK_TO_START` skips its first event group's
+note-ons (M07GM loses 8 notes, the first 200 ms). The game rewinds that way
+on every loop (`FUN_00421600`). For sequencer devices the game opened with
+a type name and a file name only, the proxy's `mciSendCommandA` hook replaces
+that rewind (and the rewind in its `MCI_RESUME` fallback) with a close and a
+reopen of the same file. If the device ID changes, the game's ID is translated
+until the game closes it. `mciseq.dll` waits for its stream thread with
+`Sleep(4)` polls, which made a reopen take 0.7 s in the game. The proxy keeps
+`mciseq.dll` loaded and hooks its `Sleep` import, and only while it is
+reopening does `Sleep(4)` become `Sleep(0)`; the reopen then takes about 1 ms.
+Without that hook it does not reopen. `[audio] midi_restart_reopen=0`
+(`QTIM_MIDI_RESTART_REOPEN=0`) turns it off; it also needs `midi_loop_fix`.
+Trace: `midi_restart dev=... real=old->new ... total_ms=...`. Details:
+`work/tools/MIDI_LOOP_INVESTIGATION.md`.
 
 Deployment backs up both stock DLLs as `QTIM32R.DLL` and `CMGR32R.DLL` and
 restores both with `deploy.py --undeploy`.

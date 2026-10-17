@@ -1,4 +1,4 @@
-# v1.2.2
+# v1.3.0
 param(
     [string]$InstallPath = "",
     [switch]$RegisterAppCompat,
@@ -8,10 +8,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ExpectedOriginalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
-$ExpectedPatchedSha256 = "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4"
+$ExpectedPatchedSha256 = "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238"
 # Older patched executables, upgraded by rebuilding from gundam.exe.orig:
-# v1.0.2-v1.0.12 (no Phase 4 path fix) and v1.0.13-v1.0.15 (no Phase 5 stretch mode).
+# v1.0.2-v1.0.12 (no Phase 4 path fix), v1.0.13-v1.0.15 (no Phase 5 stretch mode)
+# and v1.0.16-v1.2.2 (no Phase 6 fade endpoints).
 $KnownLegacyPatchedSha256 = @(
+    "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4",
     "82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4",
     "c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942"
 )
@@ -20,9 +22,10 @@ $KnownLegacyPatchedSha256 = @(
 # (Windows MAX_PATH, kept within QuickTime's 255-byte path strings).
 $MaxFullPathBytes = 256
 $ExpectedRuntimeSha256 = "dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f"
-$ExpectedProxySha256 = "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810"
-# QTIM32.DLL proxies of v1.0.10-v1.2.1; applying over one of them upgrades it.
+$ExpectedProxySha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1"
+# QTIM32.DLL proxies of v1.0.10-v1.2.2; applying over one of them upgrades it.
 $KnownPreviousProxySha256 = @(
+    "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810",
     "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0",
     "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489",
     "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2",
@@ -272,11 +275,21 @@ function Get-StretchModeExecutableBytes([byte[]]$Data) {
     return ,$Data
 }
 
+function Get-FadeEndpointExecutableBytes([byte[]]$Data) {
+    # Phase 6: FUN_004090F0 (palette fade) loops while the step counter is
+    # below 100, so fade-out stopped at 2% (a dim copy of the old screen) and
+    # fade-in at 98%.  jl -> jle (same target) adds the exact 0%/100% step.
+    Assert-Bytes $Data 0x8689 (Convert-Hex "66 83 44 24 12 02 66 83 7c 24 12 64 0f 8c 27 ff ff ff") "VA 0x00409289 fade loop"
+    Set-Bytes $Data 0x8695 (Convert-Hex "0f 8e")
+    return ,$Data
+}
+
 function Get-FullPatchedExecutableBytes([byte[]]$Original) {
     [byte[]]$patched = Get-PatchedExecutableBytes $Original
     $patched = Get-Phase3DisplayExecutableBytes $patched "b"
     $patched = Get-PathFixExecutableBytes $patched
     $patched = Get-StretchModeExecutableBytes $patched
+    $patched = Get-FadeEndpointExecutableBytes $patched
     return ,$patched
 }
 
@@ -461,7 +474,7 @@ try {
         [byte[]]$patched = Get-FullPatchedExecutableBytes $exeBytes
         $exeStage = Stage-Bytes $exe $patched $ExpectedPatchedSha256; $staged += $exeStage
     } elseif ($KnownLegacyPatchedSha256 -contains $exeHash) {
-        # Upgrade from v1.0.2-v1.0.15: rebuild from the verified original backup.
+        # Upgrade from v1.0.2-v1.2.2: rebuild from the verified original backup.
         [byte[]]$patched = Get-FullPatchedExecutableBytes ([IO.File]::ReadAllBytes($backup))
         $exeStage = Stage-Bytes $exe $patched $ExpectedPatchedSha256; $staged += $exeStage
     }
@@ -520,7 +533,7 @@ try {
         throw "test failure injected after AppCompat commit"
     }
     $committed = $true
-    Write-Host "v1.2.2 apply committed atomically: $gameDir"
+    Write-Host "v1.3.0 apply committed atomically: $gameDir"
     if ($wantsAppCompat) { Write-Host "AppCompat pre-state saved in $sidecar" }
 } catch {
     try {

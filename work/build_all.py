@@ -1,8 +1,8 @@
-"""Build the v1.2.2 executable, proxies, release package, ZIP, and release tests.
+"""Build the v1.3.0 executable, proxies, release package, ZIP, and release tests.
 
 The pipeline is intentionally linear and reproducible:
 
-    clean source executable -> audio/movie/display-b/path/stretch patches -> proxy build
+    clean source executable -> audio/movie/display-b/path/stretch/fade patches -> proxy build
     -> release staging/allowlist/checksums -> deterministic ZIP -> atomic publish
     -> ZIP-extraction release-cycle test -> runtime executable update
 
@@ -31,6 +31,7 @@ EXPECTED_PHASE2_SHA256 = "9145d0a5fbc0070e52ab3fe873c18a849b11ba5cae8c5a9fa06c9b
 EXPECTED_PHASE3_B_SHA256 = "82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4"
 EXPECTED_PHASE4_SHA256 = "c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942"
 EXPECTED_PHASE5_SHA256 = "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4"
+EXPECTED_PHASE6_SHA256 = "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = REPO_ROOT / "run"
@@ -40,12 +41,13 @@ PATCH_MOVIE = REPO_ROOT / "work" / "exe_patches" / "patch_movie_phase2.py"
 PATCH_DISPLAY = REPO_ROOT / "work" / "exe_patches" / "patch_display_phase3.py"
 PATCH_PATH = REPO_ROOT / "work" / "exe_patches" / "patch_path_phase4.py"
 PATCH_STRETCH = REPO_ROOT / "work" / "exe_patches" / "patch_stretch_phase5.py"
+PATCH_FADE = REPO_ROOT / "work" / "exe_patches" / "patch_fade_phase6.py"
 PROXY_BUILD = REPO_ROOT / "work" / "qtim_proxy" / "build.py"
 PROXY_DLL = REPO_ROOT / "work" / "qtim_proxy" / "QTIM32.dll"
 CMGR_PROXY_DLL = REPO_ROOT / "work" / "qtim_proxy" / "CMGR32.dll"
 RELEASE_PARENT = REPO_ROOT / "release"
 RELEASE_DIR = RELEASE_PARENT / "GundamTactics_Win11Patch"
-RELEASE_ZIP = RELEASE_PARENT / "GundamTactics_Win11Patch_v1.2.2.zip"
+RELEASE_ZIP = RELEASE_PARENT / "GundamTactics_Win11Patch_v1.3.0.zip"
 RELEASE_ZIP_CHECKSUMS = RELEASE_PARENT / "checksums_zip.txt"
 RELEASE_TEST = REPO_ROOT / "work" / "tools" / "test_release_cycle.ps1"
 PACKAGE_ENTRIES = (
@@ -118,8 +120,9 @@ def build_executable_artifact(source: Path, expected_source: str) -> tuple[list[
         staging_root / f"{prefix}_display_b.exe",
         staging_root / f"{prefix}_path.exe",
         staging_root / f"{prefix}_stretch.exe",
+        staging_root / f"{prefix}_fade.exe",
     ]
-    original, audio, movie, display, path_fixed, stretch_fixed = paths
+    original, audio, movie, display, path_fixed, stretch_fixed, fade_fixed = paths
     try:
         shutil.copy2(source, original)
         run_patch(PATCH_AUDIO, "--input", original, "--output", audio)
@@ -143,7 +146,12 @@ def build_executable_artifact(source: Path, expected_source: str) -> tuple[list[
         print(f"[build] Phase 5 sha256={output_hash}")
         if output_hash.lower() != EXPECTED_PHASE5_SHA256:
             raise RuntimeError(f"Phase 5 output hash mismatch: {output_hash}")
-        return paths, stretch_fixed, output_hash
+        run_patch(PATCH_FADE, "--source", stretch_fixed, "--dest", fade_fixed)
+        output_hash = sha256(fade_fixed)
+        print(f"[build] Phase 6 sha256={output_hash}")
+        if output_hash.lower() != EXPECTED_PHASE6_SHA256:
+            raise RuntimeError(f"Phase 6 output hash mismatch: {output_hash}")
+        return paths, fade_fixed, output_hash
     except Exception:
         for path in paths:
             path.unlink(missing_ok=True)
@@ -200,7 +208,7 @@ def replace_proxy_hashes(data: bytes, proxy_hash: str, cmgr_proxy_hash: str, nam
 
 def write_package_checksums(package_dir: Path) -> None:
     lines = [
-        "# SHA256 for the v1.2.2 distribution files.",
+        "# SHA256 for the v1.3.0 distribution files.",
         "# The original game files and patched executable are intentionally excluded.",
     ]
     for name in CHECKSUM_ENTRIES:
@@ -266,7 +274,7 @@ def build_release(
     zip_checksum_stage = stage_root / RELEASE_ZIP_CHECKSUMS.name
     zip_checksum_stage.write_bytes(
         (
-            "# SHA256 for the v1.2.2 release archive.\r\n"
+            "# SHA256 for the v1.3.0 release archive.\r\n"
             f"{sha256(zip_stage).upper()}  {RELEASE_ZIP.name}\r\n"
         ).encode("utf-8")
     )

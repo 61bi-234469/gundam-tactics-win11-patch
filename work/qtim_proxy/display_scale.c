@@ -89,6 +89,32 @@ static volatile LONG g_foreign_draws;
 static GtScaleModalFn g_modal_cb;
 static int g_in_modal;
 
+/* Fade pacing.  FUN_004090F0 draws its 50 (51 with exe Phase 6) palette
+ * steps with StretchDIBits and no wait at all, so a fade is over within a
+ * few ms and, with scaling on, mostly coalesced into one present.  Each
+ * step's call returns to FADE_STEP_RET, or, with exe Phase 3 (b), to the
+ * "jmp FADE_STEP_RET" that ends its code cave: steps are spaced so that 50
+ * steps take g_fade_ms, and with scaling on every step is presented.  The
+ * schedule restarts after a pause of FADE_RESET_MS plus one step; it is
+ * anchored at the first step, so late wake-ups do not add up. */
+#define FADE_STEP_RET 0x00409289u
+#define FADE_CAVE_RET 0x00438561u
+enum { FADE_STEPS = 50, FADE_RESET_MS = 100, FADE_MS_DEFAULT = 50,
+       FADE_MS_MAX = 2000 };
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+static int g_fade_ms = FADE_MS_DEFAULT;
+static int g_fade_only; /* scaling off: only the StretchDIBits hook */
+static LARGE_INTEGER g_qpc_freq;
+static LONGLONG g_fade_start, g_fade_last;
+static int g_fade_index;
+static HANDLE g_fade_timer;
+static uintptr_t g_fade_cave_ret; /* 0 unless the Phase 3 cave is verified */
+/* Steps per fade read from the loop branch (50: jl, 51: jle with exe Phase
+ * 6), so back-to-back fades each get their own schedule; 0 if unknown. */
+static int g_fade_steps;
+
 static void modal_loop_changed(int entering) {
     if (entering == g_in_modal) return;
     g_in_modal = entering;
@@ -716,13 +742,91 @@ static BOOL WINAPI exe_StretchBlt(HDC d, int x, int y, int cx, int cy, HDC s,
     return r;
 }
 
+static LONGLONG qpc_now(void) {
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t.QuadPart;
+}
+
+/* Waits until the QPC value target: a high-resolution timer (or Sleep(1))
+ * for most of it, then yields for the last half millisecond. */
+static void wait_until(LONGLONG target) {
+    for (;;) {
+        LONGLONG left_us, now = qpc_now();
+        if (now >= target) return;
+        left_us = (target - now) * 1000000 / g_qpc_freq.QuadPart;
+        if (left_us > 700 && g_fade_timer) {
+            LARGE_INTEGER due;
+            due.QuadPart = -(left_us - 500) * 10; /* relative, 100 ns units */
+            if (SetWaitableTimer(g_fade_timer, &due, 0, NULL, NULL, FALSE)) {
+                WaitForSingleObject(g_fade_timer, (DWORD)(left_us / 1000) + 2);
+                continue;
+            }
+        }
+        if (left_us > 2000) Sleep(1);
+        else SwitchToThread();
+    }
+}
+
+/* Returns FADE_CAVE_RET when the exe Phase 3 (b) cave is there, i.e. the
+ * instruction at it is "jmp FADE_STEP_RET". */
+static uintptr_t find_fade_cave_ret(void) {
+    const BYTE *p = (const BYTE *)FADE_CAVE_RET;
+    LONG rel;
+    if ((uintptr_t)GetModuleHandleA(NULL) != 0x00400000u) return 0;
+    if (IsBadReadPtr(p, 5) || p[0] != 0xE9) return 0;
+    memcpy(&rel, p + 1, sizeof(rel));
+    if (FADE_CAVE_RET + 5u + (uintptr_t)rel != FADE_STEP_RET) return 0;
+    return FADE_CAVE_RET;
+}
+
+/* "add word [esp+12h],2; cmp word [esp+12h],64h; jl/jle" at FADE_STEP_RET. */
+static int find_fade_steps(void) {
+    static const BYTE loop[] = {0x66, 0x83, 0x44, 0x24, 0x12, 0x02, 0x66, 0x83,
+                                0x7C, 0x24, 0x12, 0x64, 0x0F};
+    const BYTE *p = (const BYTE *)FADE_STEP_RET;
+    if ((uintptr_t)GetModuleHandleA(NULL) != 0x00400000u) return 0;
+    if (IsBadReadPtr(p, sizeof(loop) + 1) || memcmp(p, loop, sizeof(loop)))
+        return 0;
+    if (p[sizeof(loop)] == 0x8C) return 50;
+    if (p[sizeof(loop)] == 0x8E) return 51;
+    return 0;
+}
+
+static void fade_step_begin(void) {
+    LONGLONG now = qpc_now();
+    LONGLONG step = g_qpc_freq.QuadPart * g_fade_ms / (1000 * FADE_STEPS);
+    LONGLONG reset = g_qpc_freq.QuadPart * FADE_RESET_MS / 1000 + step;
+    if (!g_fade_last || now - g_fade_last > reset ||
+        (g_fade_steps && g_fade_index >= g_fade_steps)) {
+        if (g_fade_index)
+            scale_log("fade\tsteps=%d\tms=%d", g_fade_index,
+                      (int)((g_fade_last - g_fade_start) * 1000 /
+                            g_qpc_freq.QuadPart));
+        g_fade_start = now;
+        g_fade_index = 0;
+    } else {
+        wait_until(g_fade_start + step * g_fade_index);
+    }
+    g_fade_index++;
+}
+
 static int WINAPI exe_StretchDIBits(HDC d, int x, int y, int cx, int cy,
                                     int sx, int sy, int scx, int scy,
                                     const VOID *bits, const BITMAPINFO *bmi,
                                     UINT usage, DWORD rop) {
-    int r = x_StretchDIBits(d, x, y, cx, cy, sx, sy, scx, scy, bits, bmi,
-                            usage, rop);
-    if (is_shadow(d)) mark_dirty();
+    uintptr_t ret = (uintptr_t)__builtin_return_address(0);
+    int fade = g_fade_ms > 0 &&
+        (ret == FADE_STEP_RET || (g_fade_cave_ret && ret == g_fade_cave_ret));
+    int r;
+    if (fade) fade_step_begin();
+    r = x_StretchDIBits(d, x, y, cx, cy, sx, sy, scx, scy, bits, bmi, usage,
+                        rop);
+    if (is_shadow(d)) {
+        mark_dirty();
+        if (fade) present(NULL);
+    }
+    if (fade) g_fade_last = qpc_now();
     return r;
 }
 
@@ -817,6 +921,12 @@ static const HookSpec k_exe_hooks[] = {
     {"gdi32.dll", "PatBlt", (void *)(uintptr_t)exe_PatBlt, (void **)&x_PatBlt},
     {"gdi32.dll", "SetPixel", (void *)(uintptr_t)exe_SetPixel,
      (void **)&x_SetPixel},
+};
+
+/* With scaling off: fade pacing only. */
+static const HookSpec k_fade_hooks[] = {
+    {"gdi32.dll", "StretchDIBits", (void *)(uintptr_t)exe_StretchDIBits,
+     (void **)&x_StretchDIBits},
 };
 
 static const HookSpec k_qt_hooks[] = {
@@ -946,8 +1056,34 @@ int gt_scale_attach(const char *ini_path, HMODULE qt_module, GtScaleLogFn log) {
     g_filter = parse_filter(value);
     g_start_fullscreen = ini_path &&
         GetPrivateProfileIntA("display", "fullscreen", 0, ini_path) != 0;
+    read_setting("QTIM_FADE_MS", "fade_ms", "50", ini_path, value,
+                 sizeof(value));
+    g_fade_ms = atoi(value);
+    if (g_fade_ms < 0) g_fade_ms = 0;
+    if (g_fade_ms > FADE_MS_MAX) g_fade_ms = FADE_MS_MAX;
+    if (g_fade_ms && !QueryPerformanceFrequency(&g_qpc_freq)) g_fade_ms = 0;
+    if (g_fade_ms) {
+        g_fade_cave_ret = find_fade_cave_ret();
+        g_fade_steps = find_fade_steps();
+    }
+    if (g_fade_ms) {
+        g_fade_timer = CreateWaitableTimerExW(
+            NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+            TIMER_ALL_ACCESS);
+        if (!g_fade_timer) g_fade_timer = CreateWaitableTimerW(NULL, TRUE, NULL);
+    }
     if (g_scale_request == SCALE_OFF) {
         scale_log("off\treason=disabled");
+        if (g_fade_ms) {
+            if (install_hooks(GetModuleHandleA(NULL), k_fade_hooks, 1, 1)) {
+                g_fade_only = 1;
+            } else {
+                restore_hooks();
+                g_fade_ms = 0;
+            }
+        }
+        scale_log("fade_pacing\tms=%d\tfade_cave=%d\tfade_steps=%d", g_fade_ms,
+                  g_fade_cave_ret != 0, g_fade_steps);
         return 0;
     }
     InitializeCriticalSection(&g_present_lock);
@@ -958,16 +1094,28 @@ int gt_scale_attach(const char *ini_path, HMODULE qt_module, GtScaleLogFn log) {
         !install_hooks(qt_module, k_qt_hooks,
                        sizeof(k_qt_hooks) / sizeof(k_qt_hooks[0]), 0)) {
         restore_hooks();
+        g_fade_ms = 0;
         scale_log("off\treason=iat_patch_failed");
         return 0;
     }
     g_hooks_active = 1;
-    scale_log("hooked\tslots=%u\tscale=%d\tfilter=%d\tfullscreen=%d",
-              g_record_count, g_scale_request, g_filter, g_start_fullscreen);
+    scale_log("hooked\tslots=%u\tscale=%d\tfilter=%d\tfullscreen=%d\tfade_ms=%d"
+              "\tfade_cave=%d\tfade_steps=%d", g_record_count, g_scale_request,
+              g_filter,
+              g_start_fullscreen, g_fade_ms, g_fade_cave_ret != 0,
+              g_fade_steps);
     return 1;
 }
 
 void gt_scale_detach(int process_exit) {
+    if (g_fade_only) {
+        g_fade_only = 0;
+        restore_hooks();
+    }
+    if (!process_exit && g_fade_timer) {
+        CloseHandle(g_fade_timer);
+        g_fade_timer = NULL;
+    }
     if (!g_hooks_active) return;
     g_hooks_active = 0;
     InterlockedExchange(&g_stop, 1);
@@ -1013,6 +1161,27 @@ void gt_scale_service_frame_input(void) {
          * which pumps the queue itself until the button is released. */
         DispatchMessageA(&msg);
     }
+}
+
+static BOOL CALLBACK find_game_window(HWND hwnd, LPARAM out) {
+    char cls[16];
+    if (GetClassNameA(hwnd, cls, sizeof(cls)) && lstrcmpA(cls, "Gundam") == 0) {
+        *(HWND *)out = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+int gt_scale_adopt_early(void) {
+    HWND hwnd = NULL;
+    if (!g_hooks_active || g_main || g_failed) return 0;
+    EnumThreadWindows(GetCurrentThreadId(), find_game_window, (LPARAM)&hwnd);
+    if (!hwnd || !is_main_window(hwnd)) return 0;
+    scale_log("adopted_early");
+    /* Nothing pumps messages until QuickTime's initialisation returns, so
+     * paint the enlarged client now instead of leaving it undrawn. */
+    UpdateWindow(hwnd);
+    return 1;
 }
 
 HDC gt_scale_get_dc(HWND hwnd) {

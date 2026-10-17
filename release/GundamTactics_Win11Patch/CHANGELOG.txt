@@ -1,6 +1,31 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.3.0 - 2026-10-17
+--------------------
+- Fades go fully black and come back to full brightness. The game's fade
+  stopped at 2% (fade-out), leaving a dim copy of the old screen during the
+  blackout, and at 98% (fade-in). gundam.exe Phase 6 changes one byte of the
+  fade loop so it also draws the 0%/100% step.
+- Fades are visible again. The fade's steps had no wait between them and
+  finished within a few milliseconds (with window scaling, most were never
+  shown). The QTIM32 proxy now spaces each fade over 50 ms, about what
+  recordings of the 2001 reissue on a PC show, and shows every step.
+  `[display]` `fade_ms` (0 = the unpaced original, up to 2000) changes it.
+- Looping BGM no longer loses its opening. When the game restarts a song,
+  the Windows 11 MIDI sequencer skipped the notes of its first moment
+  (about 0.2 s on PEGASUS's M07). The proxy reopens the song instead of
+  rewinding it; this takes about 1 ms. `[audio]` `midi_restart_reopen=0`
+  turns it off.
+- The window is enlarged as soon as the game makes its first QuickTime call,
+  before QuickTime's initialisation (which opens the MIDI device and can
+  take a second or more), instead of staying at 576x416 until it returned.
+  `[diag]` `startup=1` writes an opt-in startup timing log
+  (qtim_startup.log).
+- apply.ps1 and revert.ps1 accept the v1.2.2 gundam.exe and QTIM32 proxy
+  and upgrade or remove them in place. The CMGR32 proxy and the installer
+  behaviour are the same as v1.2.2.
+
 v1.2.2 - 2026-10-05
 --------------------
 - Moving or resizing the window during a battle (or sortie/cruise) movie

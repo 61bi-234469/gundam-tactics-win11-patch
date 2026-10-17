@@ -1,5 +1,5 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.2.2
+Windows 11 互換パッチ v1.3.0
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
@@ -23,6 +23,8 @@ Windows 11 で動かすと、プロパティの設定(互換モード、管理�
 - フェードなどで画面が上下反転する
 - 画面内にユニットなどがいないときに、バトルカウントが早送りされない
 - 特定のハーバー画面で不自然な縦線が表示される
+- 画面が暗転するときに前の画面がうっすら残る、フェードが一瞬で終わって見えない
+- BGM が最初に戻ってループするときに、曲の頭が少し欠ける
 また、ゲーム画面を大きなウィンドウや全画面で遊べるようになります。
 
 
@@ -52,7 +54,7 @@ Windows 11 で動かすと、プロパティの設定(互換モード、管理�
 
 ※ ゲームを C:\Program Files などに入れている場合は、途中で「このアプリが
   デバイスに変更を加えることを許可しますか?」と出ます。「はい」を選んでください。
-※ 以前のバージョン(v1.0.x / v1.1.0 / v1.2.0 / v1.2.1)のパッチを当てている場合も、そのまま同じ手順で
+※ 以前のバージョン(v1.0.x / v1.1.0 / v1.2.0 / v1.2.1 / v1.2.2)のパッチを当てている場合も、そのまま同じ手順で
   上書きできます。先に元に戻す必要はありません。
 
 
@@ -110,6 +112,8 @@ CD の中身をフォルダへコピーしてから当てます。QuickTime も 
   - filter=nearest 拡大した絵をぼかさず、ドットのくっきりした表示にする
   - filter=smooth  拡大した絵をいつもなめらかに表示する
   - fullscreen=1   起動したときから全画面表示にする
+  - fade_ms=0      画面のフェードを元の速さ(一瞬)に戻す
+                   (既定は 50。ミリ秒で、最大 2000 まで指定できます)
 
 
 ■ ゲームのフォルダについての注意
@@ -187,6 +191,19 @@ What is fixed
   from the paused position instead. To turn both off, set
   `QTIM_MIDI_LOOP_FIX=0` or put `[audio]` / `midi_loop_fix=0` in
   `qtim_compat.ini`.
+- BGM loop restart (v1.3.0): when the game restarts a song that has
+  played, it rewinds it with MCI_SEEK_TO_START. The Windows 11 sequencer
+  then skips the note-ons of the song's first event group (M07GM.MID: 8
+  notes, the first 200 ms), so every loop started with its opening cut. A
+  freshly opened device plays them, so the QTIM32 proxy closes and reopens
+  the same file at that rewind (and when a song ends while resumed after
+  minimizing). The game's device ID is kept (translated if the new device
+  gets another one). mciseq.dll waits for its own thread with Sleep(4)
+  polls, which made a reopen take about 0.7 s; while the proxy reopens
+  (for at most 50 ms) those polls only yield, so a reopen takes about
+  1 ms. mciseq.dll is not modified on disk. To turn this off, put
+  `[audio]` / `midi_restart_reopen=0` in `qtim_compat.ini` or set
+  `QTIM_MIDI_RESTART_REOPEN=0`; it also needs the BGM loop fix above.
 - Movies: the 32-bit QTIM32 proxy decodes SMC video and supplies raw 8-bit
   and big-endian twos audio. GetMoviePict-path audio follows movie time with
   a small lookahead. Controller clock/status and controller-frame drawing stay
@@ -207,6 +224,15 @@ What is fixed
 - Display: Phase 3 part b fixes the Win11 top-down DIB height interpretation
   used by the game's screen drawing. Logos, title screens, PUSH ANY BUTTON, and the
   observed 12-second screen are upright in the real-screen A/B test.
+- Fades (v1.3.0): the game's palette fade (FUN_004090F0) drew 50 steps
+  from 100% to 2% (fade-out) or 0% to 98% (fade-in), so a fade-out left a
+  dim copy of the old screen. Phase 6 changes the loop condition (one
+  byte) so it also draws the exact 0%/100% step. The steps also had no
+  wait between them and finished within a few milliseconds; on a scaled
+  window most of them were never shown. The QTIM32 proxy now spaces the
+  steps of each fade over 50 ms (about what recordings of the 2001
+  reissue on a PC show) and shows each step. `[display]` `fade_ms=0`
+  restores the unpaced fade (max 2000).
 - Harbor screen: Bmp\HERBOR\MUSA.DOC is 587 pixels wide (every other
   full-screen BMP is 576), and the game shrinks it with the DC's default
   BLACKONWHITE stretch mode, which ANDs 8bpp palette indices of the merged
@@ -244,9 +270,13 @@ What is fixed
   system menu still wait for the game. While the title bar or border is
   held, the movie's clock and sound are paused (v1.2.2), so on release
   the movie resumes where it stopped instead of jumping ahead. Settings in `qtim_compat.ini`
-  `[display]`: `scale=auto|off|2..8` (initial size; `off` installs no hooks
-  and keeps the original window), `filter=auto|nearest|smooth` (auto:
-  nearest at whole multiples, halftone otherwise), `fullscreen=0|1`.
+  `[display]`: `scale=auto|off|2..8` (initial size; `off` keeps the
+  original window and installs only the fade-pacing hook),
+  `filter=auto|nearest|smooth` (auto: nearest at whole multiples, halftone
+  otherwise), `fullscreen=0|1`, `fade_ms=0..2000` (default 50). From
+  v1.3.0 the window is enlarged on QuickTime's first call, before its
+  initialisation (which opens the MIDI device and can take a second),
+  instead of after it.
   `QTIM_DISPLAY_SCALE` and `QTIM_DISPLAY_FILTER` override the INI.
 - Install folder: the original executable joined the install folder and each
   asset name in an 80-byte buffer, so a folder longer than 54 bytes failed
@@ -298,10 +328,10 @@ the game folder never overwrites the game's QTIM32.DLL/CMGR32.DLL. The script ve
   script refuses to overwrite it. A failed transaction restores all files,
   registry state, and the sidecar.
 
-Updating from v1.0.2-v1.0.16, v1.1.0, v1.2.0 or v1.2.1: run the new apply.ps1 on the
+Updating from v1.0.2-v1.0.16, v1.1.0 or v1.2.0-v1.2.2: run the new apply.ps1 on the
 patched folder.
 It rebuilds gundam.exe from the verified `gundam.exe.orig`; no revert is
-needed first. A QTIM32.DLL proxy from v1.0.10-v1.2.1 is replaced in place
+needed first. A QTIM32.DLL proxy from v1.0.10-v1.2.2 is replaced in place
 (QTIM32R.DLL must still be the verified original runtime). To move the game
 to a longer folder, move the whole folder
 (including `gundam.exe.orig`, QTIM32R.DLL, and CMGR32R.DLL) after applying.
@@ -349,8 +379,8 @@ Known limitations
   not the game's actual BGM MCI sequence, which remains a user-side capture
   after advancing past the title screen. The MCI hook is installed whenever
   the BGM loop fix or MCI tracing is enabled; the trace rows show the
-  game's own calls, and `midi_loop` / `midi_resume` rows show what the
-  proxy changed.
+  game's own calls, and `midi_loop` / `midi_resume` / `midi_restart` rows
+  show what the proxy changed.
 - Part a of the Phase 3 experiment is not included: it was rejected because
   real-screen A/B testing reversed the PUSH layer. The release contains part
   b only.
@@ -359,16 +389,17 @@ Reference SHA256
 ----------------
 Stock gundam.exe:
   38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3
-Patched gundam.exe (Phase 1 + 2 + 3b + 4 + 5):
-  607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4
-The patched gundam.exe is unchanged since v1.0.16.
+Patched gundam.exe (Phase 1 + 2 + 3b + 4 + 5 + 6):
+  505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238
+The patched gundam.exe changed in v1.3.0 (Phase 6).
 Previous patched gundam.exe (accepted for upgrade):
+  v1.0.16-v1.2.2:  607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4
   v1.0.13-v1.0.15: c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942
   v1.0.2-v1.0.12:  82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4
 Stock QTIM32.DLL:
   dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f
 Release QTIM32.dll proxy:
-  785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810
+  1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1
 Stock CMGR32.DLL:
   9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4
 Release CMGR32.dll companion proxy:
