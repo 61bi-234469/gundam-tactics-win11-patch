@@ -228,7 +228,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
   <div class="eyebrow">Gundam Tactics Mobility Fleet0079 · 非公式攻略資料</div>
   <h1>MOBILITY FLEET0079 攻略データ</h1>
   <p class="lead">ゲームの動作を調べて分かった戦闘の計算式、パイロットの能力と成長、命令とAIの動き、キャンペーンの進み方と、全ユニット・全パイロット・全ミッションのデータを、独自の文章・表・図にまとめました。</p>
-  <p class="intro-note">プログラムとデータの調査に基づく資料です。<b>実機のプレイで確認していない項目を含みます</b>（<a href="#sources">付録B</a>）。01版（2001年の復刻版）を基に作成しました。96版（1996年のオリジナル版）はプログラムが同じで、ゲームデータの違いは画像3枚だけです。最終更新 2026-10-15。</p>
+  <p class="intro-note">プログラムとデータの調査に基づく資料です。<b>実機のプレイで確認していない項目を含みます</b>（<a href="#sources">付録B</a>）。01版（2001年の復刻版）を基に作成しました。96版（1996年のオリジナル版）はプログラムが同じで、ゲームデータの違いは画像3枚だけです。最終更新 2026-10-21。</p>
   <nav class="entries" aria-label="目的別の入口">
     <a class="entry" href="#start"><b>初めて遊ぶ</b><span>初出撃までの確認リスト</span></a>
     <a class="entry" href="#missions"><b>今の任務を調べる</b><span>番号・地域で検索、分岐と増援</span></a>
@@ -241,7 +241,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
     <div class="toc-row"><span class="toc-part">第2部 キャンペーン</span><span class="toc-links"><a href="#campaign"><b>7 キャンペーンの流れ</b><span>持ち越すもの、得点と功績、新艦配備</span></a><a href="#supply"><b>8 パイロット増員とユニット補充</b><span>寄港時の増員、ユニット補充と計算機</span></a><a href="#routes"><b>9 ルート別の進行</b><span>ルートごとの功績・旗艦・補充の推移</span></a><a href="#missions"><b>10 ミッション一覧</b><span>全42ミッションの地図・増援・分岐</span></a></span></div>
     <div class="toc-row"><span class="toc-part">第3部 データ</span><span class="toc-links"><a href="#ms"><b>11 ユニットデータ</b><span>性能表と距離ごとの攻撃力</span></a><a href="#ships"><b>12 戦艦データ</b><span>攻撃・防御・機関の性能表</span></a><a href="#ranking"><b>13 ランキング</b><span>ユニットと戦艦の攻撃力・防御力</span></a><a href="#roster"><b>14 パイロット名鑑</b><span>全130人の能力と加入時期</span></a></span></div>
     <div class="toc-row"><span class="toc-part">第4部 ツール</span><span class="toc-links"><a href="#sim"><b>15 戦闘シミュレーター</b><span>命中率・ダメージ・撃破までの目安</span></a><a href="#save"><b>16 セーブデータビューア</b><span>セーブから今の部隊と次の補充を表示</span></a></span></div>
-    <div class="toc-row"><span class="toc-part">付録</span><span class="toc-links"><a href="#bugs"><b>A 仕様の穴とバグ</b><span>有利な仕様と不具合の一覧（絞り込みあり）</span></a><a href="#sources"><b>B 出典と未確認事項</b><span>出典、確認の範囲、更新履歴</span></a></span></div>
+    <div class="toc-row"><span class="toc-part">付録</span><span class="toc-links"><a href="#bugs"><b>A 仕様の穴とバグ</b><span>有利な仕様と不具合の一覧（絞り込みあり）</span></a><a href="#sources"><b>B 出典と未確認事項</b><span>出典、確認の範囲、更新履歴</span></a><a href="#pick"><b>C 初期メンバーと増員を選ぶ</b><span>ゲームオーバーを使って、欲しい5人で始める方法と、寄港時の増員の選び方</span></a></span></div>
   </nav>
 </header>
 <nav class="crumb off" id="crumb" aria-label="現在地"><a class="home" href="#top">≡ 目次</a><span class="where" id="crumb-where"></span><span class="step"><a id="crumb-prev" title="前のページ">← 前</a><a id="crumb-next" title="次のページ">次 →</a></span></nav>
@@ -252,7 +252,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
     <div class="finding"><b>ユニット戦は多対一が有利</b><p>狙いを分散させず、1機に集中して撃つと敵の数を早く減らせます。HPが半分を切るまで削れば、撃破できなくても敵は母艦へ逃げ帰ります。</p></div>
     <div class="finding"><b>ビームは遠いと弱い</b><p>ビーム兵器の遠隔攻撃は離れるほど威力が下がり、最大射程では半分になります。Gダッシュは約4マスより遠いと近接攻撃の方が強くなります。</p></div>
     <div class="finding"><b>斜めに進むほうが速い</b><p>斜めの1歩も横の1歩と同じ移動ゲージと推進剤で済み、距離では約1.41倍進めます。斜めを多く使うと早く着き、推進剤も節約できます。</p></div>
-    <div class="finding"><b>パイロットはユニット同士の戦いで育つ</b><p>ユニット同士の攻撃で当てたとき・避けたときと、撃破したときに成長判定が起きます。ミッションをクリアすると、旗艦に乗っているパイロット全員（出撃しなかった控えも含む）にも判定があります。戦艦を撃っても育ちませんが、撃沈したときは判定があります。</p></div>
+    <div class="finding"><b>パイロットはユニット同士の戦いで育つ</b><p>ユニット同士の攻撃で当てたとき・避けたときと、撃破したときに成長判定が起きます。ミッションをクリアすると、旗艦に乗っているパイロット全員（出撃しなかった控えも含む）にも判定があります。戦艦を撃っても育ちませんが、ユニットで撃沈したときは判定があります（戦艦の主砲で沈めたときはありません）。</p></div>
     <div class="finding"><b>ミノフスキー粒子を使いこなす</b><p>旗艦を粒子の濃い場所に置き、敵ユニットの索敵範囲の外で、敵艦から15マスより遠くに離せば、敵の主砲に狙われません。</p></div>
     <div class="finding"><b>功績で旗艦と部隊が強くなる</b><p>敵艦の撃沈+10、敵ユニットの撃破+3の得点が貯まり、功績が一定に達すると基地でより強力な旗艦が配備されて積めるユニットも増えます。補充ポイントが多いほど高性能なユニットが補充され、次の戦いが有利になります。</p></div>
   </div>
@@ -423,7 +423,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
       <ul>
         <li>ユニット同士の攻撃1回ごとに1回: 当たれば攻撃側、外れれば防御側。</li>
         <li><b>戦艦を攻撃しても判定は起きません</b>（戦艦への攻撃は必ず当たる代わり）。戦艦の迎撃を受けても避けても同じです。</li>
-        <li>ユニットを撃破した、または戦艦を撃沈したパイロットはさらに2回。</li>
+        <li>ユニットを撃破した、またはユニットで戦艦を撃沈したパイロットはさらに2回。戦艦の主砲で撃沈したときは、誰にも判定は起きません。</li>
         <li>ミッション終了後、旗艦に乗っているパイロットのうち生き残った全員がミッションごとの回数（ミッション一覧の「成長判定」）ずつ。出撃しなかった控えも含みます。</li>
         <li>成長するのは自軍のパイロットだけです。敵の名前付きパイロットは伸びません。</li>
         <li>EXP は判定の回数を数えているだけで、戦闘には効きません。成長型と NT LEVEL は変わりません。</li>
@@ -649,7 +649,7 @@ td .mark{color:var(--warn);font-size:11px;margin-left:1px}
   <h2><span class="no">8</span>パイロット増員とユニット補充 <span class="tag">SUPPLY</span></h2>
   <div class="rule" id="recruit">
       <h3>パイロット増員（寄港のたび）</h3>
-      <p>生きているパイロットがミッションごとの目標人数より少ないと、候補（最大4人）からランダムに不足分が加わります。戦死者が出ても、候補がいる限り補充されます。ただし、起動直後にセーブをロードしたときは加わる順が固定になります（<a href="#bugs">付録A</a>）。</p>
+      <p>生きているパイロットがミッションごとの目標人数より少ないと、候補（最大4人）からランダムに不足分が加わります。戦死者が出ても、候補がいる限り補充されます。ただし、起動直後にセーブをロードしたときは加わる順が固定になります（<a href="#bugs">付録A</a>）。この順は付録Cの手順で選べます（<a href="#pick-recruit">付録C</a>）。</p>
   </div>
   <h3>ユニット補充</h3>
   <p>補充されるユニットはプレイヤーが選ぶのではなく、ミッションごとの候補から<b>補充ポイントに応じて自動で決まります</b>。ここでは、その決まり方を再現して、ポイントごとの結果を計算します。ルートごとの理論上の最大は「<a href="#routes">9 ルート別の進行</a>」にまとめています。</p>
@@ -1009,8 +1009,100 @@ flowchart TD
   <div><b>出典</b> 正規に入手した『ガンダムタクティクス MOBILITY FLEET0079』01版（2001年の復刻版）の動作を調べ、分かった仕様と数値を独自の文章・表・図にまとめました。ゲームの画像・文章・プログラム・データファイルは収録していません。ミッション一覧の地図は、粒子と艦の配置座標からこのページが独自に計算して描いた模式図です。ミッション名は、ゲーム内に名称がないため、このページで付けた呼び名です。</div>
   <div><b>権利表記</b> 本資料は非公式のファン資料で、権利者とは関係ありません。作品名・機体名・人物名などの権利は各権利者に帰属します。</div>
   <div><b>対象の版</b> 96版（1996年のオリジナル版）はプログラムが01版と同一で、ゲームデータも画像3枚を除いて同じことを確認しています。96版で攻略内容をプレイして確かめたわけではありません。</div>
-  <div><b>更新履歴</b> 2026-10-16: 付録Aに仕様の穴3件（戦艦の進路をユニットでふさぐ、同じカウントでの攻撃の順番、見えない敵への「移動」）とバグの疑い2件（増援の艦の出現マス、パイロット増員の並べ替え）を追加。7章に母艦と一緒に沈んだユニットの扱い、操作と6章に僚艦の「離脱」の地点、操作に基地の「艦隊情報」を追記。補充ポイントの説明を修正（補充候補のある基地に寄港すると、1機も補充されなくても0になる）。SKILL は EXP 600 で TOP ACE になることを明記。2026-10-15: 攻略の要点を6項目に入れ替え（多対一、ビームの減衰、斜め移動、パイロットの育ち方、ミノフスキー粒子と主砲、功績と補充）。目次の項目ごとにページを切り替える表示に変更し、章の構成を整理（操作のページを新設、命中と回避を2章に統合、命令・索敵・戦艦を4〜6章に分割、キャンペーンを7〜9章に再編、距離ごとの攻撃力をユニットデータに統合。以下の章番号は再編前のもの）。付録Aに分類・関連ページ・キーワードの絞り込みを追加。4章に成長判定が起きない場面（戦艦への攻撃）・ミッション後の成長判定の対象（旗艦に乗っているパイロット）・成長の確率を追記。5章に艦の待機カウント・AIの艦が見えている艦を優先すること、6章に目標にできる範囲と発進の取り消し・出るマス、7章に未到着の艦の扱いと減点の範囲を追加。ミッション一覧の「艦の一覧」に待機カウントを追加。1章の Alt+Q の説明（ゲームが終了する）と付録Aのミッション013の記述を訂正。 2026-10-14: 5章にユニットの攻撃の相手の決まり方（命令の目標・攻撃目標・いちばん近い敵）、遠隔攻撃の間合いと射撃能力の表、攻撃の回数を落とさないコツを追加。1章・4章に、攻撃ゲージが溜まる速さは命令と射撃能力で変わらず、実際に撃つ回数は命令と間合いで変わることを追記。付録Aの「いちばん近い敵」の不具合と射程境界の項目を具体化。 2026-10-11: 5章に戦艦への命令とユニットの出し入れの表を追加（僚艦・敵艦・友軍艦に共通）。戦艦の「攻撃」は主砲の射程外の距離50で止まることを追記。付録Aのユニットの「護衛」の不具合を具体化。 2026-10-04: 1章に戦闘中のキー操作を追加。 2026-10-03: パイロット名鑑に加入タイミングの絞り込みを追加。斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
+  <div><b>更新履歴</b> 2026-10-21: 付録Cに、寄港時のパイロット増員を選ぶ方法を追加（ミッションと補充される人数を選ぶと、加わる組み合わせごとの設定がわかる）。付録Cに、ゲームオーバーを使って初期メンバーを選ぶ方法と、能力の高い組み合わせになる設定を追加。付録Aに、主砲の画面で撃つ艦の攻撃力が近接武装の値で表示されることがある件（ムサイでは0）を追加。3章と攻略の要点に、戦艦の主砲で撃沈したときは成長判定が起きないことを明記。 2026-10-16: 付録Aに仕様の穴3件（戦艦の進路をユニットでふさぐ、同じカウントでの攻撃の順番、見えない敵への「移動」）とバグの疑い2件（増援の艦の出現マス、パイロット増員の並べ替え）を追加。7章に母艦と一緒に沈んだユニットの扱い、操作と6章に僚艦の「離脱」の地点、操作に基地の「艦隊情報」を追記。補充ポイントの説明を修正（補充候補のある基地に寄港すると、1機も補充されなくても0になる）。SKILL は EXP 600 で TOP ACE になることを明記。2026-10-15: 攻略の要点を6項目に入れ替え（多対一、ビームの減衰、斜め移動、パイロットの育ち方、ミノフスキー粒子と主砲、功績と補充）。目次の項目ごとにページを切り替える表示に変更し、章の構成を整理（操作のページを新設、命中と回避を2章に統合、命令・索敵・戦艦を4〜6章に分割、キャンペーンを7〜9章に再編、距離ごとの攻撃力をユニットデータに統合。以下の章番号は再編前のもの）。付録Aに分類・関連ページ・キーワードの絞り込みを追加。4章に成長判定が起きない場面（戦艦への攻撃）・ミッション後の成長判定の対象（旗艦に乗っているパイロット）・成長の確率を追記。5章に艦の待機カウント・AIの艦が見えている艦を優先すること、6章に目標にできる範囲と発進の取り消し・出るマス、7章に未到着の艦の扱いと減点の範囲を追加。ミッション一覧の「艦の一覧」に待機カウントを追加。1章の Alt+Q の説明（ゲームが終了する）と付録Aのミッション013の記述を訂正。 2026-10-14: 5章にユニットの攻撃の相手の決まり方（命令の目標・攻撃目標・いちばん近い敵）、遠隔攻撃の間合いと射撃能力の表、攻撃の回数を落とさないコツを追加。1章・4章に、攻撃ゲージが溜まる速さは命令と射撃能力で変わらず、実際に撃つ回数は命令と間合いで変わることを追記。付録Aの「いちばん近い敵」の不具合と射程境界の項目を具体化。 2026-10-11: 5章に戦艦への命令とユニットの出し入れの表を追加（僚艦・敵艦・友軍艦に共通）。戦艦の「攻撃」は主砲の射程外の距離50で止まることを追記。付録Aのユニットの「護衛」の不具合を具体化。 2026-10-04: 1章に戦闘中のキー操作を追加。 2026-10-03: パイロット名鑑に加入タイミングの絞り込みを追加。斜め移動が横の約1.41倍進む仕様を付録Aに追加。ミッション一覧に各ミッションの理論上の最大得点を追加。セーブデータビューアを、今の部隊の状態の後に次のミッション（新艦配備・補充されるユニット・追加パイロットの候補）を表示する並びに変更。 2026-09-28: 計算機の射程境界・戦艦の主砲と迎撃の表示・セーブ反映状態の表示を修正。初出撃までの確認リスト、ミッションの検索と直接リンク、任務ごとの要約を追加。</div>
   <div><b>未確認事項</b> 実機での動作確認は行っていません。1カウントの実時間、分岐条件「敵の離脱なし」の実際の挙動は未確定です。</div>
+  </div>
+</section>
+
+<section id="pick">
+  <h2><span class="no">C</span>初期メンバーと増員を選ぶ <span class="tag">STARTING CREW</span></h2>
+  <p>新しくゲームを始めるときの5人は、ゲームを起動してから引いた乱数の回数で決まります（<a href="#bugs">付録A</a>）。起動直後は毎回同じ5人ですが、<b>決まった手順で最初の戦闘を負けてから始め直すと、狙った5人にできます</b>。最初の戦闘は一時停止の状態で始まり、乱数は「START」を押したあとにしか進まないので、手順を同じにすれば負けたときの乱数も毎回同じになります。</p>
+  <ol class="steps">
+    <li><b>ゲームを起動し直す。</b>前の戦闘の続きからでは結果がずれます。</li>
+    <li><b>表の「負ける陣営」でニューゲームを始める。</b>ブリーフィングは開いてすぐ閉じてかまいません。出撃前の操作は結果に影響しません。</li>
+    <li><b>戦闘が始まったら（一時停止のまま）旗艦のエネルギー配分を表の値にする。</b>旗艦をクリックして艦の情報を開き、推進・防御・攻撃の割合を変えます。</li>
+    <li><b>操艦の地図で、表の敵艦を移動先にする。</b>地図の矢印を長押しすると端まで動かせます。ユニットは発進させません。</li>
+    <li><b>「START」を押したら、あとは何も触らない。</b>クリックやキーで一時停止すると、その時点で展開が変わります。旗艦が沈んでゲームオーバーになるまで待ちます（およそ1分）。</li>
+    <li><b>タイトルに戻ったら、欲しい陣営でニューゲームを始める。</b>タイトルと陣営の選択では乱数を使わないので、負けた陣営と違う陣営を選んでもかまいません。</li>
+  </ol>
+  <h3>能力の高い組み合わせになる設定</h3>
+  <p class="sub">「戦闘値」は 射撃 + 回避 + NT×2 の合計です。命中率の式（<a href="#hit">2章</a>）では、射撃と回避が1点で1%ずつ効き、NTは攻撃と回避の両方に入るので2倍にしています。操縦は攻撃・移動の速さに効くため、別に「操縦計」として載せています。能力値は初期値です。</p>
+  <div class="tbl"><table>
+    <thead><tr><th class="l">始める陣営</th><th>戦闘値</th><th>操縦計</th><th class="l">初期メンバー</th><th class="l">負ける陣営と移動先</th><th>推進・防御・攻撃</th></tr></thead>
+    <tbody>
+      <tr><td class="l">ジオン</td><td><b>469</b>（最高）</td><td>221</td><td class="l">ジョディ スターリング、ボルガー ニューハウザー、ヨシダ ツグアキ、ゲイリー、マイロ ジェナス</td><td class="l">ジオン・いちばん下（4番目）のサラミス</td><td>65・35・0</td></tr>
+      <tr><td class="l">ジオン</td><td>462</td><td>216</td><td class="l">ジョディ スターリング、ボルガー ニューハウザー、ヨシダ ツグアキ、ゲイリー、マーク ヘルプリン</td><td class="l">連邦・上から3番目の敵艦（ムサイ）</td><td>70・0・30</td></tr>
+      <tr><td class="l">ジオン</td><td>460</td><td>210</td><td class="l">ジョディ スターリング、ボルガー ニューハウザー、ヨシダ ツグアキ、マイロ ジェナス、マーク ヘルプリン</td><td class="l">連邦・どの敵艦でもよい</td><td>30・0・0</td></tr>
+      <tr><td class="l">連邦</td><td><b>336</b>（最高）</td><td>154</td><td class="l">エリック ワグナー、ゴードン キンブル、ブラン ブルターク、ドミニク カズンズ、レイ フレミング</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>50・30・0</td></tr>
+      <tr><td class="l">連邦</td><td>334</td><td>156</td><td class="l">エリック ワグナー、ゴードン キンブル、ブラン ブルターク、ドミニク カズンズ、クリフォード パリス</td><td class="l">連邦・上から3番目の敵艦（ムサイ）</td><td>25・55・0</td></tr>
+      <tr><td class="l">連邦</td><td>324</td><td>157</td><td class="l">エリック ワグナー、ゴードン キンブル、ブラン ブルターク、レイ フレミング、ネルソン グロスバード</td><td class="l">連邦・上から1番目の敵艦（パゾク）</td><td>55・0・0</td></tr>
+    </tbody>
+  </table></div>
+  <div class="rule">
+    <h3>注意</h3>
+    <ul>
+    <li>最初の戦闘の配置: ジオンは旗艦の右側にサラミス4隻、連邦は旗艦の左側に敵艦4隻（上からパゾク、パゾク、ムサイ、パゾク）。「上から何番目」は操艦の地図での縦の順です。</li>
+    <li>まだ見えていない（反応だけの）敵艦は、クリックするとその艦のいるマスが移動先になります。それで問題ありません。</li>
+    <li>攻撃の割合は結果に影響しませんでした（主砲が届く前に沈むため）。防御は30%未満だと0%と同じ結果になります。</li>
+    <li>最高の2つの設定は、それぞれ3〜4回試して毎回同じ結果でした。ほかの設定は1〜数回です。01版で確認しています。96版はプログラムが同じなので、同じ結果になるはずです。</li>
+    </ul>
+  </div>
+  <h3 id="pick-recruit">寄港時の増員を選ぶ</h3>
+  <p>寄港時のパイロット増員（<a href="#supply">8章</a>）も、同じ乱数で決まります。乱数で決まるのは候補（最大4人）の並び順だけで、補充される人数ぶん、並びの先頭から加わります。<b>同じ設定なら、どのミッションでも同じ並び順になります。</b>並び順は24通りすべて選べるので、どのミッションでも、候補のどの組み合わせでも狙えます。下でミッションと補充される人数を選ぶと、加わる組み合わせごとの設定がわかります。</p>
+  <ol class="steps">
+    <li><b>増員を狙うミッションの、ひとつ前の戦闘のあとに作ったセーブを用意する。</b>セーブは戦闘が終わったあとに作られ、ロードすると次のミッションの港に入るところから始まります。増員は港に入った時点で決まります。</li>
+    <li><b>ゲームを起動し直し、下で調べた設定で最初の戦闘に負ける。</b>上の手順の1〜5と同じで、「負ける陣営」でニューゲームを始めます。ロードするセーブと陣営が違ってもかまいません。</li>
+    <li><b>タイトルに戻ったら「ロード」で、用意したセーブを選ぶ。</b>タイトルとロードでは乱数を使わないので、負けたときの乱数がそのまま増員に使われます。</li>
+  </ol>
+  <div class="calc">
+    <h3>ミッションを選んで調べる</h3>
+    <div class="controls">
+      <label for="rc-mission">増員のあるミッション<select id="rc-mission"></select></label>
+      <label for="rc-need">補充される人数<select id="rc-need"></select></label>
+    </div>
+    <p class="sub" id="rc-note"></p>
+    <div class="tbl"><table id="rc-table"></table></div>
+  </div>
+  <details class="more"><summary>並び順ごとの設定の一覧（24通り）</summary>
+  <div class="tbl"><table>
+    <thead><tr><th class="l">候補の並び順（ミッション一覧の候補の1〜4人目）</th><th class="l">負ける陣営と移動先</th><th>推進・防御・攻撃</th></tr></thead>
+    <tbody>
+      <tr><td class="l">1 → 2 → 3 → 4</td><td class="l">連邦・上から4番目の敵艦（パゾク）</td><td>80・0・0</td></tr>
+      <tr><td class="l">1 → 2 → 4 → 3</td><td class="l">連邦・上から4番目の敵艦（パゾク）</td><td>20・30・0</td></tr>
+      <tr><td class="l">1 → 3 → 2 → 4</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>100・0・0</td></tr>
+      <tr><td class="l">1 → 3 → 4 → 2</td><td class="l">ジオン・上から3番目のサラミス</td><td>30・0・70</td></tr>
+      <tr><td class="l">1 → 4 → 2 → 3</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>40・0・0</td></tr>
+      <tr><td class="l">1 → 4 → 3 → 2</td><td class="l">連邦・上から1番目の敵艦（パゾク）</td><td>35・35・0</td></tr>
+      <tr><td class="l">2 → 1 → 3 → 4</td><td class="l">ジオン・上から1番目のサラミス</td><td>40・50・0</td></tr>
+      <tr><td class="l">2 → 1 → 4 → 3</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>30・0・0</td></tr>
+      <tr><td class="l">2 → 3 → 1 → 4</td><td class="l">負けなくてよい（ゲームを起動してすぐロード）</td><td>—</td></tr>
+      <tr><td class="l">2 → 3 → 4 → 1</td><td class="l">ジオン・上から4番目のサラミス</td><td>10・30・0</td></tr>
+      <tr><td class="l">2 → 4 → 1 → 3</td><td class="l">ジオン・上から1番目のサラミス</td><td>10・0・70</td></tr>
+      <tr><td class="l">2 → 4 → 3 → 1</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>5・0・0</td></tr>
+      <tr><td class="l">3 → 1 → 2 → 4</td><td class="l">ジオン・上から1番目のサラミス</td><td>0・0・0</td></tr>
+      <tr><td class="l">3 → 1 → 4 → 2</td><td class="l">連邦・上から3番目の敵艦（ムサイ）</td><td>35・0・0</td></tr>
+      <tr><td class="l">3 → 2 → 1 → 4</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>55・0・0</td></tr>
+      <tr><td class="l">3 → 2 → 4 → 1</td><td class="l">連邦・上から2番目の敵艦（パゾク）</td><td>50・40・0</td></tr>
+      <tr><td class="l">3 → 4 → 1 → 2</td><td class="l">ジオン・上から1番目のサラミス</td><td>20・40・0</td></tr>
+      <tr><td class="l">3 → 4 → 2 → 1</td><td class="l">ジオン・上から1番目のサラミス</td><td>25・0・0</td></tr>
+      <tr><td class="l">4 → 1 → 2 → 3</td><td class="l">連邦・上から1番目の敵艦（パゾク）</td><td>0・30・0</td></tr>
+      <tr><td class="l">4 → 1 → 3 → 2</td><td class="l">連邦・上から1番目の敵艦（パゾク）</td><td>40・30・0</td></tr>
+      <tr><td class="l">4 → 2 → 1 → 3</td><td class="l">連邦・上から3番目の敵艦（ムサイ）</td><td>65・0・0</td></tr>
+      <tr><td class="l">4 → 2 → 3 → 1</td><td class="l">連邦・上から3番目の敵艦（ムサイ）</td><td>95・0・0</td></tr>
+      <tr><td class="l">4 → 3 → 1 → 2</td><td class="l">連邦・上から4番目の敵艦（パゾク）</td><td>90・0・0</td></tr>
+      <tr><td class="l">4 → 3 → 2 → 1</td><td class="l">ジオン・上から3番目のサラミス</td><td>15・0・0</td></tr>
+    </tbody>
+  </table></div>
+  </details>
+  <div class="rule">
+    <h3>増員の注意</h3>
+    <ul>
+    <li>補充される人数は「ミッションの目標人数 − 旗艦に乗っているパイロットの数」です（候補の人数が上限）。ゲームは5人で始まり、港に入るたびに目標人数まで補充されるので、<b>戦死者がいなければ、補充される人数はミッションごとの目標人数の増え方で決まります</b>（連邦は多くが1人、ジオンは多くが2人。前のミッションによって変わるミッションもあります）。上の計算機は、この戦死者がいないときの人数（前のミッションで変わるときは、いちばん多い人数）を最初に選びます。戦死者がいるときは、その人数を足してください。今の人数はセーブデータビューアでも確かめられます。</li>
+    <li>能力の高いパイロットは、候補の4人目に多くいます（M002 ハインツ ベア、M004 シャルル キッシンガム、M013・M017 ロン コウ、M114 シン マツナガなど）。起動直後のロードでは4人目は最後になるので、補充が3人以下だと加わりません。</li>
+    <li>1回の負けで選べるのは、初期メンバーか増員のどちらか一方です。ニューゲームを始めると乱数が進むので、そのあとのロードでは調べた結果になりません。</li>
+    <li>すでに名簿にいる人や戦死した人も、候補にいれば選ばれます（<a href="#bugs">付録A</a>）。</li>
+    <li>負けたときの乱数は01版で記録した値です。増員の並び順はその乱数からの計算で、<b>実機ではまだ確認していません</b>。多くの設定は1回ずつの記録です。</li>
+    </ul>
   </div>
 </section>
 <nav class="pager off" id="pager" aria-label="前後のページ"><a id="pg-prev"></a><a href="#top">≡ 目次</a><a id="pg-next"></a></nav>
@@ -1597,6 +1689,63 @@ function fillSupply(){
   simEl("sp-points").addEventListener("input",supplyCalc); linkNum("sp-points",supplyCalc);
   supplyCalc();
 }
+// harbor recruits: the slot order each known GAME OVER setting gives (w: losing side and target, e: energy; empty = load right after start)
+const RC_ORDERS=[{"o":[1,2,3,4],"w":"連邦・上から4番目の敵艦（パゾク）","e":"80・0・0"},{"o":[1,2,4,3],"w":"連邦・上から4番目の敵艦（パゾク）","e":"20・30・0"},{"o":[1,3,2,4],"w":"連邦・上から2番目の敵艦（パゾク）","e":"100・0・0"},{"o":[1,3,4,2],"w":"ジオン・上から3番目のサラミス","e":"30・0・70"},{"o":[1,4,2,3],"w":"連邦・上から2番目の敵艦（パゾク）","e":"40・0・0"},{"o":[1,4,3,2],"w":"連邦・上から1番目の敵艦（パゾク）","e":"35・35・0"},{"o":[2,1,3,4],"w":"ジオン・上から1番目のサラミス","e":"40・50・0"},{"o":[2,1,4,3],"w":"連邦・上から2番目の敵艦（パゾク）","e":"30・0・0"},{"o":[2,3,1,4],"w":"","e":""},{"o":[2,3,4,1],"w":"ジオン・上から4番目のサラミス","e":"10・30・0"},{"o":[2,4,1,3],"w":"ジオン・上から1番目のサラミス","e":"10・0・70"},{"o":[2,4,3,1],"w":"連邦・上から2番目の敵艦（パゾク）","e":"5・0・0"},{"o":[3,1,2,4],"w":"ジオン・上から1番目のサラミス","e":"0・0・0"},{"o":[3,1,4,2],"w":"連邦・上から3番目の敵艦（ムサイ）","e":"35・0・0"},{"o":[3,2,1,4],"w":"連邦・上から2番目の敵艦（パゾク）","e":"55・0・0"},{"o":[3,2,4,1],"w":"連邦・上から2番目の敵艦（パゾク）","e":"50・40・0"},{"o":[3,4,1,2],"w":"ジオン・上から1番目のサラミス","e":"20・40・0"},{"o":[3,4,2,1],"w":"ジオン・上から1番目のサラミス","e":"25・0・0"},{"o":[4,1,2,3],"w":"連邦・上から1番目の敵艦（パゾク）","e":"0・30・0"},{"o":[4,1,3,2],"w":"連邦・上から1番目の敵艦（パゾク）","e":"40・30・0"},{"o":[4,2,1,3],"w":"連邦・上から3番目の敵艦（ムサイ）","e":"65・0・0"},{"o":[4,2,3,1],"w":"連邦・上から3番目の敵艦（ムサイ）","e":"95・0・0"},{"o":[4,3,1,2],"w":"連邦・上から4番目の敵艦（パゾク）","e":"90・0・0"},{"o":[4,3,2,1],"w":"ジオン・上から3番目のサラミス","e":"15・0・0"}];
+const RC_VAL=p=>p.sh+p.ev+2*p.nt;
+function recruitCands(m){
+  const sideIdx=m.side==="連邦"?0:1;
+  return m.recruits.map(n=>DATA.pilots.find(p=>p.n===n&&Math.floor(p.id/50)===sideIdx)).filter(Boolean);
+}
+// recruits at each harbor when nobody dies: start with 5, every harbor tops up to its target (at most the candidates)
+// out[mission][previous mission] = the recruit counts reached over the routes through it
+let RC_NODEATH=null;
+const RC_DUP={109:"アラン チャンバーズは、ミッション101で加わっていることがあります。その場合も、選ばれると二重に加わります（付録A）。",110:"ジョージ キューカーは、ミッション101で加わっていることがあります。その場合も、選ばれると二重に加わります（付録A）。"};
+function recruitNoDeath(){
+  const byId={}, out={}; DATA.missions.forEach(m=>byId[m.id]=m);
+  const walk=(id,r,prev)=>{
+    const m=byId[id], need=Math.max(0,m.roster-r);
+    if(m.recruits.length){ const c=out[id]||(out[id]={}); (c[prev]||(c[prev]=new Set())).add(Math.min(need,m.recruits.length)); }
+    r+=Math.min(need,m.recruits.length);
+    if(m.ending||m.a==null) return;
+    (m.a===m.b?[m.a]:[m.a,m.b]).forEach(n=>walk(n,r,id));
+  };
+  walk(0,5); walk(100,5);
+  return out;
+}
+function recruitCalc(e){
+  const m=DATA.missions.find(x=>x.id===+simEl("rc-mission").value), cands=recruitCands(m);
+  RC_NODEATH=RC_NODEATH||recruitNoDeath();
+  const nd=RC_NODEATH[m.id]||{}, prevs=Object.keys(nd).map(Number).sort((a,b)=>a-b);
+  const ndv=[...new Set(prevs.flatMap(p=>[...nd[p]]))].sort((a,b)=>a-b);
+  const ns=simEl("rc-need"), keep=+ns.value;
+  ns.innerHTML=[0,...cands.map((_,i)=>i+1)].map(v=>`<option value="${v}">${v}人</option>`).join("");
+  // a new mission starts from its no-death recruit count (the largest when it depends on the route)
+  const def=ndv.length?ndv[ndv.length-1]:1;
+  ns.value=Math.min(e&&e.target===ns?keep:def,cands.length);
+  const need=+ns.value, groups=new Map();
+  RC_ORDERS.forEach(r=>{
+    const got=r.o.map(k=>cands[k-1]).filter(Boolean).slice(0,need);
+    const key=got.map(p=>p.id).sort((a,b)=>a-b).join(",");
+    const g=groups.get(key);
+    if(!g) groups.set(key,{got,set:r}); else if(!r.w) g.set=r;
+  });
+  const rows=[...groups.values()].sort((a,b)=>b.got.reduce((t,p)=>t+RC_VAL(p),0)-a.got.reduce((t,p)=>t+RC_VAL(p),0));
+  const nTxt=vs=>[...vs].sort((a,b)=>a-b).map(v=>v+"人").join("か");
+  const ndTxt=!ndv.length?"":ndv.length===1?(ndv[0]?`戦死者がいなければ、補充されるのは${ndv[0]}人です。`:"戦死者がいなければ補充はありません（戦死者がいると、その人数が補充されます）。")
+    :`戦死者がいなければ、補充されるのは${prevs.map(p=>`ミッション${MID(p)}から来たとき${nTxt(nd[p])}`).join("、")}です`+
+      (prevs.some(p=>nd[p].size>1)?"（「か」はそれより前のルートで変わります）。":"。");
+  simEl("rc-note").textContent=`目標 ${m.roster} 人。${ndTxt}候補: ${cands.map(p=>`${p.n}（操${p.op} 射${p.sh} 回${p.ev} NT${p.nt}）`).join("、")}。`+
+    (!need?"補充されないので、設定は関係ありません。":need===cands.length?"候補は全員加わります。":`加わる組み合わせは${rows.length}通りです。`)+
+    (RC_DUP[m.id]?` ${RC_DUP[m.id]}`:"");
+  simEl("rc-table").innerHTML=`<thead><tr><th class="l" style="min-width:10em">加わるパイロット</th><th>戦闘値</th><th class="l" style="min-width:10em">負ける陣営と移動先</th><th>推進・防御・攻撃</th></tr></thead><tbody>`+
+    (!need?`<tr><td class="l" colspan="4">補充はありません。</td></tr>`:rows.map(g=>`<tr><td class="l">${g.got.map(p=>esc(p.n)).join("、")}</td><td class="num">${g.got.reduce((t,p)=>t+RC_VAL(p),0)}</td>`+
+      (g.set.w?`<td class="l">${g.set.w}</td><td>${g.set.e}</td>`:`<td class="l">負けなくてよい（ゲームを起動してすぐロード）</td><td>—</td>`)+`</tr>`).join(""))+"</tbody>";
+}
+function fillRecruit(){
+  DATA.missions.filter(m=>m.recruits.length&&m.reachable).forEach(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=`${m.side} ${MID(m.id)} ${m.title}`;simEl("rc-mission").appendChild(o)});
+  simEl("rc-mission").addEventListener("change",recruitCalc); simEl("rc-need").addEventListener("change",recruitCalc);
+  recruitCalc();
+}
 function fillRouteDetail(){
   const sel=simEl("route-sel");
   ROUTES.forEach((r,i)=>{const o=document.createElement("option");o.value=i;o.textContent=`${r.side} ${r.path.map(m=>MID(m.id)).join("→")}`;sel.appendChild(o)});
@@ -1638,7 +1787,7 @@ const BUGS=[
  ["仕様の穴","ユニット同士の攻撃で命中判定の乱数は0〜99（ごくまれに100）で「命中率以下なら命中」なので、表示上の命中率より1%高い（95%なら96%）。","影響は小さい。","コード確認"],
  ["仕様の穴","乱数はシードを設定しないため、ゲームを起動するたびに同じ列から始まる。戦闘の外で乱数を使うのは、初期メンバーの抽選と寄港時のパイロット増員の抽選だけ。戦闘中は操作のタイミングで乱数を引く回数が変わる。","起動直後の抽選は毎回同じ結果になる。戦闘を1回はさむと結果が変わる。","コード確認"],
  ["仕様の穴","起動直後にニューゲームを始めると、初期メンバーは毎回同じ5人になる（連邦: フレミング、ヘリンズ、カズンズ、ワグナー、パリス／ジオン: ヘルプリン、クロフォード、スターリング、ゲイリー、ホプキンス）。ゲームオーバー後にそのままニューゲームを始めると、別の5人になる。","ほかのメンバーで始めたいときは、ゲームを終了せずにゲームオーバー後のニューゲームで引き直す。","コード確認"],
- ["仕様の穴","起動直後にセーブをロードすると、寄港時のパイロット増員は、候補の枠2 → 枠3 → 枠1 → 枠4 の順で決まる（ミッション一覧の候補は枠1から順に並んでいる）。不足は通常1〜2人なので、枠4の候補は加入しない。枠4には M002 ハインツ ベア、M004 シャルル キッシンガム、M013・M017 ロン コウ、M114 シン マツナガなど、能力の高いパイロットが多い。","枠4のパイロットを狙うなら、起動直後のロードから始めず、前のミッションから続けてプレイするか、戦闘をはさんでからロードし直す。並び順が変わり、加入する可能性がある。","コード確認"],
+ ["仕様の穴","起動直後にセーブをロードすると、寄港時のパイロット増員は、候補の枠2 → 枠3 → 枠1 → 枠4 の順で決まる（ミッション一覧の候補は枠1から順に並んでいる）。不足は通常1〜2人なので、枠4の候補は加入しない。枠4には M002 ハインツ ベア、M004 シャルル キッシンガム、M013・M017 ロン コウ、M114 シン マツナガなど、能力の高いパイロットが多い。","枠4のパイロットを狙うなら、付録Cの手順で最初の戦闘に負けてからロードすると、並び順を選べる。","コード確認"],
  ["仕様の穴","ユニットの射程判定は「距離² &lt; 射程²」、戦艦は「距離² ≦ 射程²」。ユニットはちょうど最大射程のマスからは撃てない。「遠隔攻撃」は射撃能力100で射程ちょうどの距離を目指すため、止まっている目標に対して、ザク・ゲルググイェーガー・ガンダムGダッシュは必ず射程のすぐ外で止まって撃たない。ジムコマンド・リック・ドムなど射程値170の機体、ザニー、コアブースターも多くの場合射程外で止まる。","射撃能力の高いパイロットに遠隔攻撃を出すときは、5章「遠隔攻撃の間合いと射撃能力」の上限を確認する。超えるなら接近攻撃にする。","コード確認・再現計算"],
  ["仕様の穴","乱数は0〜n の範囲で、上端の n も出る（確率1/32768）。ダメージの乱数は最大120%。新規ゲームの初期メンバー抽選で n が出ると、候補の外の値が名簿に入る（起動直後の乱数列では起きない）。","影響は無視できる。","コード確認"],
  ["仕様の穴","僚艦と敵艦は、主砲の目標が射程外か見えないとき、今の目標の半分未満の距離に見えている敵艦がいなければ撃たない。射程内に別の敵艦がいても撃たずに待つことがある。","僚艦には、射程内の艦を目標として指定し直す。","コード確認"],
@@ -1651,6 +1800,7 @@ const BUGS=[
  ["仕様の穴","見えていない敵のマスをクリックすると命令は「移動」になるが、そのユニットはその敵を攻撃の相手として覚えていて、射程に入れば見えていなくても撃つ。","見えない敵の位置がわかっているときは、そのマスへ「移動」を命じると撃たせられる。","コード確認"],
  ["表示のみ","パイロットの SPEC（接近戦・遠隔戦・対艦戦）と SKILL（NOVICE〜TOP ACE）は表示されるだけで、計算には使われない。","SPECで配置を決める必要はない。","コード確認"],
  ["表示のみ","僚艦・友軍・敵のユニットに付く「自動攻撃」は、命令欄では「遠隔攻撃」と表示される。","画面の命令表示と実際の動きが違うことがある。","コード確認"],
+ ["表示のみ","旗艦が主砲を撃つとき・撃たれるときの画面で、撃つ艦の「攻撃力」に主砲ではなく近接武装の値が出ることがある。直前に処理された攻撃（画面外のものも含む）が隣接した相手への攻撃だったときに起きる。近接武装のないムサイとムサイ後期型では「0」になる。","表示だけの問題で、ダメージは主砲の値で正しく計算される。","コード確認"],
  ["バグの疑い","ユニットの「護衛」で、護衛する艦から距離40より離れていて、見えている敵が艦から距離20以内にいないと、艦へ戻らず旗艦のユニットへ向かう（旗艦のユニットは旗艦の1機目、僚艦1〜3のユニットは旗艦の2〜4機目、友軍のユニットは5〜8機目、敵のユニットは僚艦などのユニットへ）。正しく動いたとしても、戻り先は護衛する艦ではなく自分の母艦になっている。見えている敵が1体もいないときは、下の「その場で止まる」不具合のほうが起きる。","護衛させるユニットは、護衛する艦から40以上離さない。","コード確認"],
  ["バグの疑い","AIの艦の「突撃」で、近くに敵がいるかの判定が、艦ではなく艦と同じ番号のユニットからの距離で行われている。","敵艦のエネルギー配分が状況に合わないことがある。","コード確認・解釈"],
  ["バグの疑い","AIの艦の「護衛」は護衛相手を選ぶ処理が常に0を返し、すぐ「突撃」に変わる。","護衛役の敵艦も前に出てくる。","コード確認"],
@@ -1677,7 +1827,7 @@ const BUGS=[
  ["未使用データ","連邦の9人（シロー アマダ、ミケル、サンダース、カレン、エレドア、バニング、ベイト、モンシア、アデル）とジオンの7人（アポリー、ライデン、ガトー、シーマ、ケリィ、カリウス、アイナ）は、キャンペーンでは味方にならない。ライデンはミッション105で僚艦のパイロットとして出るだけ。","パイロット名鑑に能力値は載っているが、自分の部隊では使えない。","データ確認"],
 ];
 // related page for each BUGS entry, same order
-const BUG_CH=["battle", "orders", "orders", "damage", "damage", "targeting", "campaign", "supply", "battle", "battle", "pilot", "damage", "supply", "campaign", "supply", "damage", "damage", "warships", "orders", "missions", "warships", "controls", "warships", "battle", "targeting", "pilot", "orders", "orders", "warships", "warships", "supply", "targeting", "targeting", "orders", "warships", "warships", "warships", "pilot", "campaign", "missions", "warships", "supply", "missions", "missions", "missions", "missions", "missions", "roster", "missions", "missions", "roster"];
+const BUG_CH=["battle", "orders", "orders", "damage", "damage", "targeting", "campaign", "supply", "battle", "battle", "pilot", "damage", "supply", "campaign", "supply", "damage", "damage", "warships", "orders", "missions", "warships", "controls", "warships", "battle", "targeting", "pilot", "orders", "warships", "orders", "warships", "warships", "supply", "targeting", "targeting", "orders", "warships", "warships", "warships", "pilot", "campaign", "missions", "warships", "supply", "missions", "missions", "missions", "missions", "missions", "roster", "missions", "missions", "roster"];
 function bugTable(){
   const cls={"仕様の穴":"good","表示のみ":"solid","バグの疑い":"yes","データの不整合":"yes","未使用データ":"solid"};
   const k=simEl("bug-kind").value, ch=simEl("bug-ch").value, q=simEl("bug-q").value.trim();
@@ -1997,7 +2147,7 @@ sel.addEventListener("change",draw); rng.addEventListener("input",draw); linkNum
 })();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
-missionMax(); msTable(); shipTable(); growthTable(); fillJoinFilter(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); bugTable(); returnTable(); rankings(); shipRankings(); draw(); updateSrc();
+missionMax(); msTable(); shipTable(); growthTable(); fillJoinFilter(); pilotTable(); missionList(); fillSim(); sim(); routes(); fillRouteDetail(); fillSupply(); fillRecruit(); bugTable(); returnTable(); rankings(); shipRankings(); draw(); updateSrc();
 route(); openMission(location.hash);
 // the campaign flowcharts render after load and push the mission list down; keep a linked mission in view
 (()=>{
