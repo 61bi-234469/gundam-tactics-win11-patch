@@ -144,19 +144,203 @@ order; helper stretches are serialized and a helper retires when a newer
 one is created). A window subclass maps
 mouse `lParam` back to 576x416, repaints from the memory DC, hides resizes
 from the game (it only sees minimize and the restore after it), and toggles
-borderless fullscreen on Alt+Enter. From the movie paths above, queued
-`WM_NCLBUTTONDOWN`/`DBLCLK` on the caption, border or maximize button are
-dispatched so the window can be moved and resized during movies.
+borderless fullscreen on Alt+Enter. From the movie paths above, from
+`gundam.exe`'s `GetTickCount` import (its only clock read, which its timed
+waits spin on: the 3 s Bandai logo, the pauses between battle movies) and
+its `ReadFile` import (scene loads), at most once per tick value, and from
+the fade-pacing wait, queued `WM_NCLBUTTONDOWN`/`DBLCLK` on the caption,
+border or maximize button are dispatched so the window can be moved and
+resized there. Input is read in order, so while a mouse button message is
+queued the mouse moves ahead of it (client or non-client) are dispatched
+first, as the game's own loop would (its `WM_MOUSEMOVE` only records the
+position); sent messages are processed as by any `PeekMessage` (input can
+wait behind the activation a click starts). Any other input at the head
+stops the scan, with one exception for a client button release while the
+user is pressing the caption or border at that moment (logical left button
+down, cursor on the window, `DefWindowProc` hit test on the frame). The game
+calls `SetCapture` on a button press and acts on some presses at once (a
+click that skips a movie starts the next movie, which reads no input), so
+the release stays queued and the window keeps the capture: every later
+press, the caption included, arrives as a client click behind it. Such a
+release is taken out of the queue and held (at most 16), the capture is
+released, and the game's own next `PeekMessage`/`GetMessage` returns it
+before anything newer, with `GetMessageTime` reporting the time the
+input-time fix below gives it (trace `input_held` / `input_released`).
+Presses are never held: their release would then be scanned without the
+capture the press sets and arrive as `WM_NCLBUTTONUP`. The music
+switch between scenes is covered too: Windows 11's `mciseq.dll` waits for
+its stream thread with `Sleep(4)` polls during `MCI_OPEN`/`MCI_CLOSE`
+(0.7-0.8 s each), and its `Sleep` import (hooked at the game's first
+`MCI_OPEN`, see the MIDI restart below) services presses before each poll on
+the game's thread (trace `frame_input msg=... wait_ms=...`).
+During the runtime's initialisation (0x39) its `midiOutOpen`,
+`midiOutClose` and `waveOutGetNumDevs` (about 100 ms each for the MIDI
+mapper, sometimes seconds) run on a short-lived worker thread with the same
+arguments and result, while the game's thread waits with
+`MsgWaitForMultipleObjects` and services the same presses (trace
+`device_call kind=... ms=... wakes=...`).
+A caption press found there (the game is busy: a movie, a wait, a load)
+does not enter USER32's modal move loop, which would block the game until
+the button is released and stop every movie the game composites itself
+(battle movies, map sprites). The proxy captures the mouse and moves the
+window to follow the cursor (`GetCursorPos`, `SetWindowPos`) on every later
+service call and every `PeekMessage`/`GetMessage` of the game, while the game
+keeps running; the drag ends when the logical left button is up
+(`GetAsyncKeyState`). Until the drag's release has gone by, the window's
+mouse messages are dropped from the queue and swallowed by the subclass, so
+the game never sees the drag as input; a new press after the drag also
+ends that and reaches the game. Held releases (above) wait for the
+drag, since their `ReleaseCapture` would end it; keyboard input is not held
+back meanwhile (trace `drag begin wait_ms=...` / `drag end ms=... moves=...
+why=...` / `drag input_done`). When the press cannot be reached because
+older input the busy game has not read is in front of it (a click that
+skipped the previous movie, a key) and the user is pressing the caption
+(borders and the maximize button wait for the game), a detached drag starts
+(`drag begin detached=1`). Each service call samples, once per tick, where
+the left button was first seen down, so the drag starts from that point and
+window position even if the cursor has left the caption since. No capture is
+taken (under a capture the queued press would be scanned as a client click),
+the older input stays queued and reaches the game in order (held releases
+first), and swallowing starts at the drag's own press, recognised by its
+screen point (`MSG.pt`) inside the caption band of the window as it was when
+the drag started. The game's own `SetCapture`/`ReleaseCapture` for that
+older click do not cancel a detached drag. The game can take seconds to
+read that older input (battle movies); meanwhile only a drag in progress
+stops the scan, so a new caption press starts another drag. Each detached
+drag still waiting for its own press keeps its caption band and the span
+of message times its press can have (from when the button was last seen up
+to when this press was first seen down); a press matching one in both is
+swallowed and the next waiting drag's input passes until its own press
+comes. Up to 32 drags can wait; beyond that no new detached drag starts. A
+waiting drag whose press arrives as a double-click passes it to the window
+and stops waiting; the others keep waiting. The press sample is used by one drag only, is
+dropped when the window has moved since it was taken, and is renewed after
+every drag and by the game's own message polls. A captured drag gives the
+capture back as soon as the button is up. A caption or border
+`WM_NCLBUTTONDOWN` that reaches the window after the button is already up
+(a press the busy game read late) is dropped, so USER32's move/size loop
+does not start late from a stale point (trace `frame_press_stale`). The
+game hides the cursor (`ShowCursor(FALSE)`) for the Bandai logo, and that
+count applies over the caption too; `gundam.exe`'s `ShowCursor` is hooked
+to track the game's count, and while it is below zero the proxy raises it
+to zero whenever the cursor is on the main window's non-client area
+(checked once per tick), so the caption can be seen and grabbed; over the
+client area the cursor stays hidden, and the game's own calls always see
+its own count (re-checked inside the hook, so the cursor over the frame does
+not blink when the game hides it). While the game is busy no WM_SETCURSOR
+arrives, so the same per-tick check also sets the cursor for the frame part
+under it as DefWindowProc would (arrow on the title bar and menu bar, sizing
+arrows on the border): the busy cursor of the launch no longer stays over
+the menu bar during QuickTime's initialisation. Border presses,
+caption double-clicks and presses the game's own loop dispatches still use
+USER32's modal loop.
 The game's thread is blocked in USER32's modal move/size loop while the
-button is held, so between `WM_ENTERSIZEMOVE` and `WM_EXITSIZEMOVE` the
-proxy pauses every movie's waveOut stream and then pushes every emulated
-controller's start time (and the shared clock CMGR reads) back by the
-loop's length: the movie resumes at the frame where it stopped, in step with
-its sound, instead of jumping ahead (trace `modal_loop enter/exit`).
-Controller-less GetMoviePict movies take their time from the game and are
-not covered; none of the battle movies use that path.
+button is held. Between `WM_ENTERSIZEMOVE` and `WM_EXITSIZEMOVE` a 10 ms
+timer on the main window keeps the movies the proxy can drive playing: the
+emulated controllers that draw onto the main window, whose audio runs in
+real time (started before the 0x36 handler services the queue) and that the
+game polled (0x36/0x06) in the last 300 ms are drawn from their running
+clock, with their waveOut stream left running, and the stock controller the
+game last idled through CMGR (cvid: the opening, the side movies), as
+reported by the CMGR proxy's `GtLastStockIdle` export and not disposed
+(0x37, a 16-entry history) since that idle, is idled
+through the game's own `MCDoAction(controller, mcActionIdle, 0)` thunk at
+`0x430974` (bytes verified). Every other movie is paused: its waveOut
+stream stops and its controller's start time (and the shared clock CMGR
+reads) is pushed back by the loop's length, so it resumes at the frame where
+it stopped, in step with its sound. That covers the battle sprites, which
+play in hidden windows and are composited by the game from GetMoviePict
+frames (trace `modal_loop enter ... playing=N stock=...` and
+`exit ... ticks=N`). Controller-less GetMoviePict movies take their time
+from the game and wait with it.
+Menu bar: while scaling is active the window gets a menu bar (ゲーム: exit,
+which posts `WM_CLOSE` so the game's own confirmation runs; 表示: the client
+area at 1-4 times 576x416, keeping the window's top-left corner inside the
+work area, sizes that do not fit greyed, fullscreen, the stretch filter, and
+hiding the bar, which keeps the client area's size; ヘルプ: バージョン情報...,
+an about window with the version (`GT_PATCH_VERSION` at build time) and the
+guide, releases and source links, each in a read-only field with an Open
+button; it runs on its
+own thread and message loop and has no owner, so the game keeps running and
+its window procedure is never re-entered (opening it again brings it to the
+front); ツール:
+a screenshot and opening the screenshot folder, the save folder (`DataDir`
+of `Gundam.ini`, read as the game reads it), the game folder and the INI).
+The tools are in `menu_tools.c`: the screenshot copies the shadow (the
+576x416 frame on screen, movie frames included) under the present lock and
+a worker thread saves it as PNG through GDI+ (`Pictures\GundamTactics\GT_
+<date>_<time>.png`, BMP if GDI+ fails); folders, the INI (in Notepad) and
+URLs are opened with `ShellExecuteW` on a worker thread, so the game's
+thread is never pumped or stalled by the shell. shell32, ole32, gdiplus and
+advapi32 are loaded only there, so the proxy's imports are unchanged. A
+missing INI is first created as a commented template (UTF-8 without BOM,
+every setting commented out); when the process is virtualized, a
+zero-byte `WriteFile` makes Windows copy a protected INI into the
+VirtualStore (opening for writing alone does not), and Notepad (not
+virtualized) is given that copy. Screenshot names are reserved with
+`CREATE_NEW`, so two shots within a second get `_2`.
+Workers report back with a posted `WM_APP+0x47`, shown in the title bar
+(the window is ANSI, so the text stays within CP932). The window menu gets メニューバーを表示 to
+bring a hidden bar back. Choices are written to the INI's `[display]`
+(`scale=1..4` from the size menu, `filter`, `menu=0|1`) with
+`WritePrivateProfileStringA`; the game has no manifest, so under Program
+Files the write goes to the user's VirtualStore and is read back from there.
+A failed write keeps the choice for the run and says so in the title bar for
+2.5 s (trace `menu saved` / `menu save_failed`). `scale=1` is the original
+size with scaling on (resizable, menu bar); `off` (or `0`) is still off. The game has no menu and handles no
+`WM_COMMAND`, so the commands (`0x4700`-`0x47FF`) are taken by the subclass;
+it swallows `WM_SYSCHAR`, so the labels have no mnemonics, and
+`SC_KEYMENU` from Alt alone or F10 is dropped so that the arrow keys stay
+with the game. Every `AdjustWindowRectEx` passes the menu, the bar is taken
+off in fullscreen (and put back before the saved placement), and
+`[display] menu=0` leaves it out. The menu loop blocks the game's thread
+like the move/size loop and is reported the same way
+(`WM_ENTERMENULOOP`/`WM_EXITMENULOOP`, same timer and movie handling). A
+menu-bar press is dispatched by the same service calls as a border press,
+so the menu opens during movies, waits and loads too; there the exit item
+is greyed (its `WM_CLOSE` would only arrive after the movie). While a
+client release the busy game has not read is queued in front and the user
+is pressing the menu bar at that moment, the release is held for the game as
+for a caption press, so the menu-bar press behind it is scanned without the
+game's capture and reaches the menu. A menu-bar press scanned while the game
+still holds the capture of its previous click arrives as a client
+`WM_LBUTTONDOWN` above the screen; the subclass recognises it by its
+`GetMessagePos` point (hit test `HTMENU`), keeps it from the game, releases
+the capture and opens the menu there (trace `menu_press ... captured=1`). A
+menu-bar press the game reads with the button already up and more than
+500 ms late is dropped, captured or not (trace `menu_press_stale`); others
+are logged as `menu_press age=... service=...`. Measured: the opening (stock
+cvid) keeps playing while the menu is open; battle cut-ins (`BOMB.mov` and
+the like, composited by the game) pause with their sound and resume in step,
+as for a border drag.
+Window position and size: the INI's `[window]` (`left`, `top` of the window
+in screen coordinates, `client_width`, `client_height`, `maximized`) is
+written with `WritePrivateProfileSectionA` whenever it changes (end of a
+move/size loop or of the proxy's own caption drag, maximize and the restore
+from it, the size menu, leaving fullscreen), never at exit: the game ends
+the process inside its `WM_DESTROY`. The values are the window's normal
+(not maximized, minimized or fullscreen) placement; the client size is kept
+rather than the window's, so the bar or the frame can change without
+changing the game screen. At adoption it is used instead of the scale
+setting: the client size is clamped to 576x416 .. the monitor's work area,
+and when the caption band (`SM_CYCAPTION` high) does not cover at least
+64 px of any monitor's work area the window is moved into the nearest one;
+`maximized=1` maximizes it after placing (trace `window saved/restored/
+reset`). 表示 has 記憶する (`[display] remember_window=0|1`) and
+最初の状態に戻す (deletes `[window]` and centres the window at the scale
+setting). `QTIM_DISPLAY_SCALE` turns the memory off.
+`[game] multi_instance=1` is read by the executable itself, not by the
+proxy: exe Phase 7's start-up check lets a second copy start only with it
+(the proxy is not loaded yet at that point). It is not in the menu.
+Message boxes: MessageBox centres its window on the monitor, not on its
+owner, so the game's boxes (the WM_CLOSE exit confirmation, the 0x7E
+notice, the debug boxes) only looked centred while the 576x416 window sat in
+the middle of the screen. `gundam.exe`'s `MessageBoxA` is hooked: from the
+window's thread, with no owner or the main window as owner, a thread CBT
+hook for that call moves the box at `HCBT_ACTIVATE` to the centre of the
+window, kept in its work area (trace `msgbox centred`).
 `[display] scale=off` (or `QTIM_DISPLAY_SCALE=off`) installs nothing except
-the fade pacing hook below.
+the fade pacing hook below (and no menu bar).
 
 Fade pacing (experimental): the game's palette fade (`FUN_004090F0`) draws
 its 50 steps (51 with exe Phase 6) with no wait, so a fade finished in a few

@@ -126,6 +126,7 @@ typedef struct ControllerMap {
     LONG drawn_cy;
     LONG drawn_foreign;
     DWORD drawn_tick;
+    DWORD poll_tick; /* last 0x36/0x06 from the game */
     DWORD result_log_tick[2];
     uint32_t result_log_frame[2];
     int result_log_initialized[2];
@@ -1149,8 +1150,11 @@ static void midi_restart_track(MCIDEVICEID id, DWORD_PTR flags,
  * at the default timer resolution, during which the game thread and the
  * music stop.  While the proxy reopens a device (and only then, for at most
  * MIDI_FAST_SLEEP_MAX_MS) its Sleep(4) only yields the processor: the open
- * takes about 1-10 ms.  mciseq.dll is kept loaded so the hook survives the
- * close of its last device. */
+ * takes about 1-10 ms.  Otherwise each poll on the game's thread services
+ * caption/border presses first, so the window can be dragged while the game
+ * switches its music.  mciseq.dll is kept loaded so the hook survives the
+ * close of its last device; the hook is installed at the game's first
+ * MCI_OPEN. */
 typedef VOID (WINAPI *PFN_Sleep)(DWORD);
 enum { MIDI_FAST_SLEEP_MAX_MS = 50 };
 static PFN_Sleep volatile p_mciseq_sleep = NULL;
@@ -1172,6 +1176,7 @@ static VOID WINAPI mciseq_sleep_hook(DWORD ms) {
             return;
         }
     }
+    if (ms == 4) gt_scale_service_frame_input();
     p_mciseq_sleep(ms);
 }
 
@@ -1426,6 +1431,9 @@ static MCIERROR WINAPI trace_mciSendCommandA(MCIDEVICEID device, UINT command,
     MidiRestartDevice *restart = fix ? midi_restart_find(device) : NULL;
     char opened[MAX_PATH];
     int handled = 0;
+
+    if (command == MCI_OPEN && !g_mciseq_hook_state && p_real_mciSendCommandA)
+        midi_restart_prepare();
 
     if (restart && !restart->real_id) {
         /* Dead after a failed reopen: a close just forgets it; anything
@@ -1752,6 +1760,21 @@ static LONG input_time_report(const InputTimeState *st, DWORD thread,
     return real;
 }
 
+/* The time GetMessageTime reports to gundam.exe: that of the last message
+ * the game itself retrieved (through its own PeekMessageA/GetMessageA, or a
+ * held release handed to it), not the thread's real last message.  The
+ * proxy's queue servicing (caption/border/menu presses while the game is
+ * busy) and USER32's move/size and menu loops retrieve messages on the
+ * game's thread too, and the real value then moved to "now": the opening's
+ * skip guard (FUN_00402DB0: GetMessageTime() + 5000 ms) grew from about
+ * 1.9 s to 3.7 s when the window was dragged during the startup logo.  Until
+ * the game has retrieved a message on this thread, the real value is used. */
+static LONG input_time_current(const InputTimeState *st, DWORD thread,
+                               LONG real) {
+    if (st->have && st->thread == thread) return st->last_adjusted;
+    return real;
+}
+
 static void note_retrieved_message(const MSG *msg) {
     LONG adjusted = input_time_record(&g_input_time, GetCurrentThreadId(),
                                       msg->message, (LONG)msg->time);
@@ -1766,6 +1789,14 @@ static void note_retrieved_message(const MSG *msg) {
             if (written > 0) log_text(buf);
         }
     }
+}
+
+/* For display_scale: a held button release the game retrieves now. */
+static LONG held_input_time(const MSG *msg) {
+    if (!g_input_fix_enabled) return (LONG)msg->time;
+    note_retrieved_message(msg);
+    return input_time_report(&g_input_time, GetCurrentThreadId(),
+                             (LONG)msg->time);
 }
 
 static BOOL WINAPI hook_PeekMessageA(LPMSG msg, HWND hwnd, UINT first,
@@ -1783,8 +1814,8 @@ static BOOL WINAPI hook_GetMessageA(LPMSG msg, HWND hwnd, UINT first,
 }
 
 static LONG WINAPI hook_GetMessageTime(void) {
-    return input_time_report(&g_input_time, GetCurrentThreadId(),
-                             p_real_GetMessageTime());
+    return input_time_current(&g_input_time, GetCurrentThreadId(),
+                              p_real_GetMessageTime());
 }
 
 static int run_input_time_selftest(void) {
@@ -1806,6 +1837,11 @@ static int run_input_time_selftest(void) {
     /* non-input messages are never bumped; large gaps are not bridged */
     ok &= input_time_record(&st, 1, WM_TIMER, 1016) == 1016;
     ok &= input_time_record(&st, 1, WM_LBUTTONDOWN, 800) == 800;
+    /* messages the proxy or USER32 retrieved since (real 9000) are not seen */
+    ok &= input_time_current(&st, 1, 9000) == 800;
+    ok &= input_time_current(&st, 2, 9000) == 9000;
+    ok &= input_time_record(&st, 1, WM_MOUSEMOVE, 9100) == 9100;
+    ok &= input_time_current(&st, 1, 9500) == 9100;
     return ok;
 }
 
@@ -1928,6 +1964,30 @@ static int install_input_iat_hooks(void) {
  * preserving the game's normal input ordering.  Only probe from the thread
  * that owns the controller's drawing window.  Keep this outside g_state_lock:
  * PeekMessage can enter USER32/window-manager code. */
+/* EnumWindows callback: the game's "Gundam" window of this process.  With
+ * several copies of the game running, FindWindow would return any of them,
+ * and a movie would be drawn onto another game's screen.  (By class: the
+ * title changes while a menu notice is shown.) */
+static BOOL CALLBACK find_own_game_window_proc(HWND hwnd, LPARAM param) {
+    char cls[16];
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == GetCurrentProcessId() &&
+        GetClassNameA(hwnd, cls, sizeof(cls)) &&
+        lstrcmpA(cls, "Gundam") == 0) {
+        *(HWND *)param = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static HWND find_own_game_window(void) {
+    HWND hwnd = gt_scale_main_window();
+    if (hwnd) return hwnd;
+    EnumWindows(find_own_game_window_proc, (LPARAM)&hwnd);
+    return hwnd;
+}
+
 /* EnumThreadWindows callback: the game's "Gundam" window on this thread. */
 static BOOL CALLBACK find_game_window_proc(HWND hwnd, LPARAM param) {
     char cls[16];
@@ -3293,14 +3353,17 @@ static void map_movie_handle_locked(uint32_t handle, const char *path) {
  *
  * While the user drags the window's caption or border, USER32 runs a modal
  * loop on the game's thread (entered from gt_scale_service_frame_input inside
- * a movie selector, or from the game's own DispatchMessage), so the game
- * stops.  The emulated controller clock (GetTickCount based) and the waveOut
- * stream would keep running and the movie would jump ahead on release.  Pause
- * the audio for the loop and push each controller's start back by its
- * length.  Controller-less GetMoviePict movies take their time from the game
- * and are not covered (none of the battle movies use that path).  WinMM is
- * called outside g_state_lock. */
-enum { MODAL_CAPACITY = 32 };
+ * a movie selector or a timed wait, or from the game's own DispatchMessage),
+ * so the game stops.  The movies the proxy can drive by itself keep playing:
+ * a timer in that loop (modal_loop_tick) draws the emulated controllers the
+ * game was polling when the loop started, whose clock and waveOut stream keep
+ * running, and idles the stock QuickTime controller the game was idling
+ * (cvid movies) through the game's own MCIdle thunk.  Everything else is
+ * paused: their audio stops and the other controllers' start times are
+ * pushed back by the loop's length, so they resume where they stopped.
+ * Controller-less GetMoviePict movies take their time from the game and just
+ * wait.  WinMM is called outside g_state_lock. */
+enum { MODAL_CAPACITY = 32, MODAL_PLAY_RECENT_MS = 300 };
 static DWORD g_modal_start_tick = 0;
 /* Controllers present when the loop started, with their start then.  Only
  * these, still unchanged at the end (no 0x31 reset, no re-creation), are
@@ -3308,6 +3371,62 @@ static DWORD g_modal_start_tick = 0;
 static uint32_t g_modal_controllers[MODAL_CAPACITY];
 static DWORD g_modal_controller_starts[MODAL_CAPACITY];
 static int g_modal_controller_count = 0;
+/* Controllers drawn by the timer during the loop (not shifted). */
+static uint32_t g_modal_playing[MODAL_CAPACITY];
+static DWORD g_modal_playing_starts[MODAL_CAPACITY];
+static int g_modal_playing_count = 0;
+static unsigned g_modal_ticks = 0;
+/* Stock (cvid) controller to idle during the loop, 0 for none. */
+static uint32_t g_modal_stock_controller = 0;
+static DWORD g_modal_stock_idle_tick = 0;
+/* Recent DisposeMovieController (0x37) calls on stock controllers, so a
+ * controller freed after its last idle is never idled again (handles are
+ * reused, so only disposals after that idle count).  Game thread only. */
+enum { STOCK_DISPOSED_CAPACITY = 16 };
+static uint32_t g_stock_disposed[STOCK_DISPOSED_CAPACITY];
+static DWORD g_stock_disposed_ticks[STOCK_DISPOSED_CAPACITY];
+static unsigned g_stock_disposed_next = 0;
+
+static void note_stock_disposed(uint32_t controller) {
+    unsigned i = g_stock_disposed_next++ % STOCK_DISPOSED_CAPACITY;
+    g_stock_disposed[i] = controller;
+    g_stock_disposed_ticks[i] = GetTickCount();
+}
+
+/* 1 if controller, idled at idle_tick, has not been disposed since (a
+ * disposal in the same tick counts as after). */
+static int stock_alive_since(uint32_t controller, DWORD idle_tick) {
+    unsigned i;
+    for (i = 0; i < STOCK_DISPOSED_CAPACITY; i++)
+        if (g_stock_disposed[i] == controller &&
+            (LONG)(g_stock_disposed_ticks[i] - idle_tick) >= 0)
+            return 0;
+    return 1;
+}
+typedef uint32_t (__stdcall *PFN_GtLastStockIdle)(DWORD *tick);
+static PFN_GtLastStockIdle g_last_stock_idle;
+/* gundam.exe 0x430974: push ebx; mov bx,1; mov ax,1; call [0x43E31C];
+ * pop ebx; ret -- MCDoAction through the secondary dispatcher, called by
+ * the game as (controller, 1 = mcActionIdle, 0) and cleaned by the caller. */
+#define GAME_MCIDLE_THUNK 0x00430974u
+typedef uint32_t (__cdecl *PFN_GameMcAction)(uint32_t controller,
+                                            uint32_t action, uint32_t param);
+static PFN_GameMcAction g_game_mcaction;
+
+static void init_modal_stock_idle(void) {
+    static const BYTE thunk[] = {0x53, 0x66, 0xBB, 0x01, 0x00, 0x66, 0xB8,
+                                 0x01, 0x00, 0xFF, 0x15, 0x1C, 0xE3, 0x43,
+                                 0x00, 0x5B, 0xC3};
+    HMODULE cmgr = GetModuleHandleA("CMGR32.DLL");
+    if ((uintptr_t)GetModuleHandleA(NULL) == 0x00400000u &&
+        !IsBadReadPtr((const void *)GAME_MCIDLE_THUNK, sizeof(thunk)) &&
+        memcmp((const void *)GAME_MCIDLE_THUNK, thunk, sizeof(thunk)) == 0)
+        g_game_mcaction = (PFN_GameMcAction)GAME_MCIDLE_THUNK;
+    if (cmgr)
+        g_last_stock_idle = (PFN_GtLastStockIdle)(uintptr_t)GetProcAddress(
+            cmgr, "GtLastStockIdle");
+}
+
 /* Restarts every paused movie stream; a stream stays marked until its
  * restart succeeds.  Returns the number restarted and stores the attempts. */
 static int restart_paused_audio(int *attempted) {
@@ -3372,6 +3491,15 @@ static int restart_paused_audio(int *attempted) {
     return restarted;
 }
 
+static int modal_playing_movie_locked(uint32_t movie_handle) {
+    int i;
+    for (i = 0; i < g_modal_playing_count; i++) {
+        ControllerMap *controller = find_controller(g_modal_playing[i]);
+        if (controller && controller->movie_handle == movie_handle) return 1;
+    }
+    return 0;
+}
+
 static void modal_loop_notify(int entering) {
     HWAVEOUT outs[MODAL_CAPACITY];
     uint32_t movies[MODAL_CAPACITY];
@@ -3382,28 +3510,66 @@ static void modal_loop_notify(int entering) {
     int shared_shifted = 0;
     int restarted;
     DWORD elapsed;
-    char buf[160];
+    char buf[200];
     int written;
     int i;
 
     if (!g_locks_ready) return;
     if (entering) {
+        DWORD idle_tick = 0;
+        uint32_t stock = 0;
+        static int stock_idle_ready;
         if (g_modal_paused) return;
         g_modal_paused = 1;
         g_modal_start_tick = GetTickCount();
+        g_modal_ticks = 0;
+        if (!stock_idle_ready) {
+            /* CMGR32.DLL is loaded by QuickTime's initialisation. */
+            stock_idle_ready = 1;
+            init_modal_stock_idle();
+        }
+        if (g_last_stock_idle && g_game_mcaction) {
+            stock = g_last_stock_idle(&idle_tick);
+            if (!stock ||
+                (DWORD)(g_modal_start_tick - idle_tick) > MODAL_PLAY_RECENT_MS ||
+                !stock_alive_since(stock, idle_tick))
+                stock = 0;
+        }
+        g_modal_stock_controller = stock;
+        g_modal_stock_idle_tick = idle_tick;
+        HWND main_window = gt_scale_main_window();
         EnterCriticalSection(&g_state_lock);
         g_modal_controller_count = 0;
-        for (i = 0; i < g_controller_count &&
-                    g_modal_controller_count < MODAL_CAPACITY; i++) {
-            g_modal_controllers[g_modal_controller_count] =
-                g_controllers[i].handle;
-            g_modal_controller_starts[g_modal_controller_count] =
-                g_controllers[i].start_tick;
-            g_modal_controller_count++;
+        g_modal_playing_count = 0;
+        for (i = 0; i < g_controller_count; i++) {
+            ControllerMap *controller = &g_controllers[i];
+            MovieMap *movie = find_movie(controller->movie_handle);
+            /* Only controllers drawing onto the main window show anything by
+             * themselves; the battle sprites play in hidden windows and the
+             * game composites their frames, so those wait like the game. */
+            if (movie && movie->decoder && controller->poll_tick &&
+                movie->audio_mode == AUDIO_MODE_REALTIME &&
+                main_window && controller->target_hwnd == main_window &&
+                (DWORD)(g_modal_start_tick - controller->poll_tick) <=
+                    MODAL_PLAY_RECENT_MS &&
+                g_modal_playing_count < MODAL_CAPACITY) {
+                g_modal_playing[g_modal_playing_count] = controller->handle;
+                g_modal_playing_starts[g_modal_playing_count] =
+                    controller->start_tick;
+                g_modal_playing_count++;
+            } else if (g_modal_controller_count < MODAL_CAPACITY) {
+                g_modal_controllers[g_modal_controller_count] =
+                    controller->handle;
+                g_modal_controller_starts[g_modal_controller_count] =
+                    controller->start_tick;
+                g_modal_controller_count++;
+            }
         }
         for (i = 0; i < g_movie_count && count < MODAL_CAPACITY; i++) {
             if (g_movies[i].handle && g_movies[i].audio_out &&
-                !g_movies[i].audio_paused) {
+                !g_movies[i].audio_paused &&
+                !(g_movies[i].audio_mode == AUDIO_MODE_REALTIME &&
+                  modal_playing_movie_locked(g_movies[i].handle))) {
                 outs[count] = g_movies[i].audio_out;
                 movies[count] = g_movies[i].handle;
                 count++;
@@ -3422,14 +3588,17 @@ static void modal_loop_notify(int entering) {
         }
         LeaveCriticalSection(&g_state_lock);
         written = snprintf(buf, sizeof(buf),
-                           "%lu\tmodal_loop\tenter\taudio_paused=%d/%d\n",
-                           (unsigned long)g_modal_start_tick, paused, count);
+                           "%lu\tmodal_loop\tenter\taudio_paused=%d/%d\t"
+                           "playing=%d\tstock=%08X\n",
+                           (unsigned long)g_modal_start_tick, paused, count,
+                           g_modal_playing_count, (unsigned)stock);
         if (written > 0) log_text(buf);
         return;
     }
 
     if (!g_modal_paused) return;
     g_modal_paused = 0;
+    g_modal_stock_controller = 0;
     elapsed = GetTickCount() - g_modal_start_tick;
     EnterCriticalSection(&g_state_lock);
     for (i = 0; i < g_modal_controller_count; i++) {
@@ -3452,13 +3621,15 @@ static void modal_loop_notify(int entering) {
         }
     }
     g_modal_controller_count = 0;
+    g_modal_playing_count = 0;
     LeaveCriticalSection(&g_state_lock);
     restarted = restart_paused_audio(&count);
     written = snprintf(buf, sizeof(buf),
                        "%lu\tmodal_loop\texit\telapsed=%lu\tcontrollers=%d\t"
-                       "shared=%d\taudio_restarted=%d/%d\n",
+                       "shared=%d\taudio_restarted=%d/%d\tticks=%u\n",
                        (unsigned long)GetTickCount(), (unsigned long)elapsed,
-                       shifted, shared_shifted, restarted, count);
+                       shifted, shared_shifted, restarted, count,
+                       g_modal_ticks);
     if (written > 0) log_text(buf);
 }
 
@@ -4076,7 +4247,7 @@ static void draw_controller_frame_locked(ControllerMap *controller,
             IsWindow(controller->target_hwnd)) {
             hwnd = controller->target_hwnd;
         } else {
-            hwnd = FindWindowA(NULL, "Gundam Tactics");
+            hwnd = find_own_game_window();
             if (hwnd) controller->target_hwnd = hwnd;
         }
         now = GetTickCount();
@@ -4155,6 +4326,34 @@ static void execute_controller_draw(ControllerDraw *draw) {
     if (release_dc) gt_scale_release_dc(draw->hwnd, dc);
     HeapFree(GetProcessHeap(), 0, draw->dib);
     draw->dib = NULL;
+}
+
+/* The modal loop's timer: draws each playing controller's current frame (as
+ * the game's 0x36 poll would) and idles the stock controller. */
+static void modal_loop_tick(void) {
+    int i;
+    if (!g_locks_ready || !g_modal_paused) return;
+    g_modal_ticks++;
+    for (i = 0; i < g_modal_playing_count; i++) {
+        ControllerDraw draw;
+        ControllerMap *controller;
+        memset(&draw, 0, sizeof(draw));
+        EnterCriticalSection(&g_state_lock);
+        controller = find_controller(g_modal_playing[i]);
+        if (controller &&
+            controller->start_tick == g_modal_playing_starts[i])
+            draw_controller_frame_locked(
+                controller, find_movie(controller->movie_handle), &draw);
+        LeaveCriticalSection(&g_state_lock);
+        execute_controller_draw(&draw);
+    }
+    if (g_modal_stock_controller && g_game_mcaction) {
+        if (!stock_alive_since(g_modal_stock_controller,
+                               g_modal_stock_idle_tick))
+            g_modal_stock_controller = 0;
+        else
+            g_game_mcaction(g_modal_stock_controller, 1, 0);
+    }
 }
 
 static HGLOBAL make_black_dib(unsigned width, unsigned height) {
@@ -4504,6 +4703,7 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
                 /* The controller clock and controller rendering are always
                  * real-time driven.  Audio mode is deliberately independent:
                  * a later GetMoviePict may switch only the audio path. */
+                controller->poll_tick = GetTickCount();
                 if (sel == 0x36) {
                     if (movie->audio_mode == AUDIO_MODE_UNSET)
                         set_movie_audio_mode_locked(movie, AUDIO_MODE_REALTIME,
@@ -4525,8 +4725,10 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
                                   result_controller_handle, result);
             LeaveCriticalSection(&g_state_lock);
             execute_controller_draw(&draw);
-            if (sel == 0x36) maybe_pump_messages(pump_hwnd);
+            /* Audio first: a drag entered from the pump keeps a playing
+             * controller's clock and stream running together. */
             if (start_audio) start_movie_audio(audio_movie);
+            if (sel == 0x36) maybe_pump_messages(pump_hwnd);
             drain_audio_teardowns();
             return handled_result(f, result);
         }
@@ -4542,6 +4744,9 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
     }
 
     if (sel == 0x37) {
+        /* A stock controller the modal loop must no longer idle. */
+        if (arg0 && !gt_controller_fake_handle_format(arg0))
+            note_stock_disposed(arg0);
         EnterCriticalSection(&g_state_lock);
         bound = controller_binding_in_args_locked(arg0, arg1, arg2, arg3,
                                                   &bound_controller,
@@ -5039,6 +5244,8 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
         else
             log_text("input_fix=off\treason=disabled\n");
         gt_scale_set_modal_callback(modal_loop_notify);
+        gt_scale_set_modal_tick_callback(modal_loop_tick);
+        gt_scale_set_input_time_callback(held_input_time);
         {
             char ini_path[MAX_PATH];
             gt_scale_attach(build_trace_ini_path(self, ini_path,
@@ -5054,9 +5261,11 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
     } else if (reason == DLL_THREAD_DETACH) {
         free_thread_state();
     } else if (reason == DLL_PROCESS_DETACH) {
-        /* Scaling hooks chain on top of the input hooks: undo them first. */
-        gt_scale_detach(reserved != NULL);
+        /* Undo hooks in reverse order: the diagnostics chain on top of the
+         * scaling hooks in the QuickTime DLL, and those on top of the input
+         * hooks in gundam.exe. */
         gt_diag_detach(reserved != NULL);
+        gt_scale_detach(reserved != NULL);
         if (g_input_iat_hook_count && !restore_input_iat_hooks()) {
             log_text("FATAL input IAT hook restoration failed\n");
         }

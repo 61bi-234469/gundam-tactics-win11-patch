@@ -1,5 +1,5 @@
 ガンダムタクティクス MOBILITY FLEET0079
-Windows 11 互換パッチ v1.3.0
+Windows 11 互換パッチ v1.4.0
 ========================================
 
 このパッチは、Windows 11 でガンダムタクティクスを遊べるようにするためのものです。
@@ -26,6 +26,8 @@ Windows 11 で動かすと、プロパティの設定(互換モード、管理�
 - 画面が暗転するときに前の画面がうっすら残る、フェードが一瞬で終わって見えない
 - BGM が最初に戻ってループするときに、曲の頭が少し欠ける
 また、ゲーム画面を大きなウィンドウや全画面で遊べるようになります。
+v1.4.0 からは、メニューバー、ウィンドウの位置と大きさの記憶、ゲームの同時起動
+(設定ファイルで許可したとき)にも対応しています。
 
 
 ■ 用意するもの
@@ -54,7 +56,7 @@ Windows 11 で動かすと、プロパティの設定(互換モード、管理�
 
 ※ ゲームを C:\Program Files などに入れている場合は、途中で「このアプリが
   デバイスに変更を加えることを許可しますか?」と出ます。「はい」を選んでください。
-※ 以前のバージョン(v1.0.x / v1.1.0 / v1.2.0 / v1.2.1 / v1.2.2)のパッチを当てている場合も、そのまま同じ手順で
+※ 以前のバージョン(v1.0.x / v1.1.0 / v1.2.0 / v1.2.1 / v1.2.2 / v1.3.0)のパッチを当てている場合も、そのまま同じ手順で
   上書きできます。先に元に戻す必要はありません。
 
 
@@ -100,7 +102,10 @@ CD の中身をフォルダへコピーしてから当てます。QuickTime も 
   縦横の比率はそのままで、余った部分は黒く表示されます。
 - Alt キーを押しながら Enter キーを押すと全画面表示になります。
   もう一度押すと元のウィンドウに戻ります。
-- 設定を変えたいときは、ゲームのフォルダにメモ帳で「qtim_compat.ini」という
+- ムービーや読み込みの最中でも、タイトルバーをドラッグしてウィンドウを
+  動かせます(v1.4.0 から。ムービーは動かしている間も再生が続きます)。
+- 大きさなどの設定は、メニューバー(下の「■ メニューバー」)からも変えられます。
+  メモ帳で変えたいときは、ゲームのフォルダに「qtim_compat.ini」という
   名前のファイルを作り、[display] の行に続けて設定を書きます。例:
 
     [display]
@@ -108,12 +113,76 @@ CD の中身をフォルダへコピーしてから当てます。QuickTime も 
 
   書ける設定:
   - scale=off      パッチを当てる前と同じ、元の大きさ(576×416)のウィンドウに戻す
-  - scale=2        起動したときの大きさを 2 倍にする(3、4 なども指定できます)
+  - scale=2        起動したときの大きさを 2 倍にする(1、3、4 なども指定できます。
+                   1 は元の大きさですが、off と違ってメニューバーなどが使えます)
   - filter=nearest 拡大した絵をぼかさず、ドットのくっきりした表示にする
   - filter=smooth  拡大した絵をいつもなめらかに表示する
   - fullscreen=1   起動したときから全画面表示にする
   - fade_ms=0      画面のフェードを元の速さ(一瞬)に戻す
                    (既定は 50。ミリ秒で、最大 2000 まで指定できます)
+  - menu=0         メニューバーを隠す
+  - remember_window=0  ウィンドウの位置と大きさを記憶しない
+                   (記憶していると、起動したときの大きさは scale より記憶した方が
+                   使われます。メニューの「位置と大きさを最初の状態に戻す」で
+                   記憶を消せます)
+  [game] の行に続けて書く設定:
+  - multi_instance=1  ゲームの同時起動を許可する(既定は 0。メニューにはありません)
+
+
+■ メニューバー(v1.4.0 から)
+- ゲームのウィンドウの上にメニューバーが付きます。
+  - ゲーム: ゲームを終了(ゲームの終了確認がそのまま出ます)
+  - 表示: ウィンドウの大きさ(1〜4 倍)、全画面表示、拡大の補間(自動/くっきり/
+          なめらか)、メニューバーを隠す、ウィンドウの位置と大きさを記憶する、
+          位置と大きさを最初の状態に戻す
+  - ツール: スクリーンショットを保存、スクリーンショット・セーブデータ・
+          ゲームのフォルダを開く、設定ファイル(qtim_compat.ini)を開く
+  - ヘルプ: バージョン情報(パッチのバージョンと、攻略データ・配布ページ・
+          ソースコードへのリンクを別のウィンドウに表示。ゲームは止まりません)
+- メニューはマウスで使います。Alt キーだけを押しても、メニューには移りません
+  (方向キーはゲームの操作のまま使えます)。
+- メニューを開いている間はゲームが止まります。戦闘のムービーは止まった所から
+  続きます(BGM は鳴り続けます)。
+- メニューで選んだ設定は qtim_compat.ini に保存され、次に起動したときも使われます
+  (全画面表示は保存されません。起動したときから全画面にしたいときは、下の
+  fullscreen=1 を設定ファイルに書いてください)。
+- メニューバーを隠したときは、タイトルバーを右クリックして出るメニューの
+  「メニューバーを表示」で戻せます。
+- ウィンドウの位置と大きさ(最大化しているかどうかも)を覚えていて、次に起動した
+  ときは同じ場所・同じ大きさで開きます。モニターの構成が変わって画面の外に
+  なるときは、画面の中に移します。
+- スクリーンショットは、ピクチャフォルダの「GundamTactics」に、拡大前の
+  元の大きさ(576×416)の PNG で保存されます。ピクチャフォルダを OneDrive に
+  入れている場合は、OneDrive にも同期されます。
+- ゲームを C:\Program Files の中に入れている場合、設定は Windows の仕組みで
+  ユーザーごとの別の場所(VirtualStore)に保存されます。そのため、エクスプローラー
+  で見える qtim_compat.ini とは別のファイルになることがあります。設定ファイルを
+  開くときは、メニューの「設定ファイル (qtim_compat.ini) を開く」を使ってください。
+- 元の大きさの画面(scale=off)では、メニューバーは付きません。
+
+
+■ ゲームを 2 つ以上同時に起動するとき(v1.4.0 から)
+- 元のゲームと同じく、最初はゲームを 1 つしか起動できません(2 つ目は「ERROR」と
+  表示されて終わります)。
+- 同時に起動したいときは、ゲームのフォルダの qtim_compat.ini に次の 2 行を書きます
+  (メニューからは変えられません。メニューの「ツール」→「設定ファイル
+  (qtim_compat.ini) を開く」で開けます)。元に戻すときは 1 を 0 にするか、
+  2 行を消します。
+
+    [game]
+    multi_instance=1
+
+  - 設定は、次に起動するゲームから使われます。
+  - 設定はゲームのフォルダごとです。01版と 96版を同時に起動するときは、後から
+    起動する方のゲームのフォルダに書いてください。
+- ただし、セーブデータはすべてのゲームで共通です(01版と 96版でも共通です)。
+  - 同じセーブ番号に別々のゲームからセーブすると、後からセーブした方で
+    上書きされます。
+  - 別のゲームでセーブした内容は、ゲームを起動し直すまで「ロード」に
+    表示されません。
+  セーブするゲームは 1 つに決めるか、ゲームごとに別々のセーブ番号を使ってください。
+- 2 つ目以降のゲームも、最後に動かしたゲームと同じ位置に開きます。
+  重なって見えるときは、タイトルバーをドラッグしてずらしてください。
 
 
 ■ ゲームのフォルダについての注意
@@ -253,7 +322,11 @@ What is fixed
   strictly increasing (same-tick collisions are moved forward by 1 ms). The
   game's own deliberate guards (clicks ignored for 1 second after some
   screen changes, 5 seconds at the opening movie, actions that confirm on
-  button release) are unchanged. To restore the original timing, set
+  button release) are unchanged. GetMessageTime reports the time of the
+  last message the game itself retrieved, so messages the patch or a
+  window drag/menu reads on the game's thread do not move those guards
+  (the opening's 5-second guard counts from the last message the game read
+  before the logo). To restore the original timing, set
   `QTIM_INPUT_FIX=0` or put `[input]` / `click_fix=0` in `qtim_compat.ini`.
 - Window scaling (v1.1.0): the game draws with GDI straight into a fixed
   576x416 window. The QTIM32 proxy now hands gundam.exe and the original
@@ -264,13 +337,19 @@ What is fixed
   paused). The window is resizable and maximizable, keeps the aspect ratio
   with black bars, opens at the largest whole multiple that fits the work
   area, and Alt+Enter toggles borderless fullscreen. Mouse coordinates are
-  mapped back to 576x416 in a window subclass. During movies, which do not
+  mapped back to 576x416 in a window subclass. The game's message boxes
+  (its MessageBoxA, e.g. the exit confirmation) are moved to the centre of
+  the window as they open (a CBT hook on the game's thread for that call);
+  Windows centres them on the screen. During movies, which do not
   read the message queue, queued title-bar/border presses are dispatched so
   the window can still be moved and resized; close, minimize, and the
-  system menu still wait for the game. While the title bar or border is
-  held, the movie's clock and sound are paused (v1.2.2), so on release
-  the movie resumes where it stopped instead of jumping ahead. Settings in `qtim_compat.ini`
-  `[display]`: `scale=auto|off|2..8` (initial size; `off` keeps the
+  system menu still wait for the game. From v1.4.0 a title-bar drag there
+  moves the window without blocking the game, so movies keep playing;
+  while a border is held (USER32's modal size loop), movies the proxy draws
+  keep playing and the others are paused with their sound (v1.2.2) and
+  resume where they stopped. Settings in `qtim_compat.ini`
+  `[display]`: `scale=auto|off|1..8` (initial size; `1` is the original
+  size with scaling on; `off` keeps the
   original window and installs only the fade-pacing hook),
   `filter=auto|nearest|smooth` (auto: nearest at whole multiples, halftone
   otherwise), `fullscreen=0|1`, `fade_ms=0..2000` (default 50). From
@@ -278,6 +357,43 @@ What is fixed
   initialisation (which opens the MIDI device and can take a second),
   instead of after it.
   `QTIM_DISPLAY_SCALE` and `QTIM_DISPLAY_FILTER` override the INI.
+- Menu bar (v1.4.0): while scaling is active the window gets a menu bar
+  (exit; window size 1-4x, fullscreen, stretch filter, hide the bar,
+  remember the window, reset it; screenshot of the 576x416 frame as PNG in
+  Pictures\GundamTactics; open the screenshot, save and game folders and
+  the INI; an about window with the version and the guide, release and
+  source links, on its own thread so the game keeps running). The game
+  handles no
+  WM_COMMAND, so the proxy's window subclass takes the commands; Alt alone
+  and F10 no longer move the keyboard into the menu (the arrow keys stay
+  with the game). The menu loop is treated like a border drag (movies the
+  proxy draws keep playing, the others pause and resume in step). Choices
+  are saved to `[display]` (`scale`, `filter`, `menu`, `remember_window`);
+  `scale=1` now means 1x with scaling on (it used to mean off).
+  Shell work and GDI+ run on worker threads; the proxy's imports are
+  unchanged. Under Program Files the INI is written to the user's
+  VirtualStore (gundam.exe has no manifest); "open the INI" opens that copy.
+- Window position and size (v1.4.0): kept in the INI's `[window]` (window
+  top-left, client size, maximized), written when they change, and used at
+  start instead of `scale` (clamped to the work area and moved back on
+  screen when its title bar would be out of reach). `QTIM_DISPLAY_SCALE`
+  turns it off.
+- Several copies at once (v1.4.0, opt-in): the original WinMain helper
+  quits with an ERROR box when a "Gundam" window already exists, and that
+  stays the default. The check runs before the proxy is loaded, so Phase 7
+  sends it (jmp at VA 0x0040F114) to a 108-byte code cave at VA
+  0x004384D0 that reads `.\qtim_compat.ini` `[game]` `multi_instance` with
+  the game's own GetPrivateProfileStringA import; with exactly `1` the second copy
+  starts, otherwise the original ERROR path runs. The setting is in the
+  INI only (not in the menu); it is per game folder and applies to copies
+  started afterwards.
+  Copies share the save folder (see Known limitations). The proxy now finds its own game
+  window per process instead of with a system-wide FindWindow.
+- Window dragging while the game is busy (v1.4.0): the title bar can be
+  dragged during the startup logo, QuickTime's initialisation, timed waits,
+  loads, music changes and movies; a caption drag there moves the window
+  without blocking the game, so movies keep playing; while the game hides
+  the cursor for the logo it is shown over the title bar.
 - Install folder: the original executable joined the install folder and each
   asset name in an 80-byte buffer, so a folder longer than 54 bytes failed
   with a Jfont load error or froze at START NEW GAME. The patched executable
@@ -328,11 +444,12 @@ the game folder never overwrites the game's QTIM32.DLL/CMGR32.DLL. The script ve
   script refuses to overwrite it. A failed transaction restores all files,
   registry state, and the sidecar.
 
-Updating from v1.0.2-v1.0.16, v1.1.0 or v1.2.0-v1.2.2: run the new apply.ps1 on the
+Updating from v1.0.2-v1.0.16, v1.1.0 or v1.2.0-v1.3.0: run the new apply.ps1 on the
 patched folder.
 It rebuilds gundam.exe from the verified `gundam.exe.orig`; no revert is
-needed first. A QTIM32.DLL proxy from v1.0.10-v1.2.2 is replaced in place
-(QTIM32R.DLL must still be the verified original runtime). To move the game
+needed first. A QTIM32.DLL proxy from v1.0.10-v1.3.0 and the CMGR32.DLL
+proxy of v1.0.10-v1.3.0 are replaced in place (QTIM32R.DLL and CMGR32R.DLL
+must still be the verified original runtimes). To move the game
 to a longer folder, move the whole folder
 (including `gundam.exe.orig`, QTIM32R.DLL, and CMGR32R.DLL) after applying.
 
@@ -381,6 +498,10 @@ Known limitations
   the BGM loop fix or MCI tracing is enabled; the trace rows show the
   game's own calls, and `midi_loop` / `midi_resume` / `midi_restart` rows
   show what the proxy changed.
+- Copies of the game running at the same time share the save folder
+  (`Gundam.ini` DataDir, both editions): saving into the same slot from two
+  copies keeps the later save, and a copy lists the saves only when it
+  starts. Each copy opens at the last remembered window position.
 - Part a of the Phase 3 experiment is not included: it was rejected because
   real-screen A/B testing reversed the PUSH layer. The release contains part
   b only.
@@ -389,21 +510,22 @@ Reference SHA256
 ----------------
 Stock gundam.exe:
   38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3
-Patched gundam.exe (Phase 1 + 2 + 3b + 4 + 5 + 6):
-  505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238
-The patched gundam.exe changed in v1.3.0 (Phase 6).
+Patched gundam.exe (Phase 1 + 2 + 3b + 4 + 5 + 6 + 7):
+  77a2b963068f4a1b794bea234b737d1c28770a5615b1d788d6b77306c21771cd
+The patched gundam.exe changed in v1.4.0 (Phase 7).
 Previous patched gundam.exe (accepted for upgrade):
+  v1.3.0:          505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238
   v1.0.16-v1.2.2:  607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4
   v1.0.13-v1.0.15: c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942
   v1.0.2-v1.0.12:  82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4
 Stock QTIM32.DLL:
   dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f
 Release QTIM32.dll proxy:
-  1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1
+  6b395c569151843f6c36965b72bfbd819804a5fe76c3e284561c13bbe8fc8520
 Stock CMGR32.DLL:
   9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4
 Release CMGR32.dll companion proxy:
-  db6456350aefe2e35114b183458457d88c6e7e8974f29863bd5b83b2be3a964d
+  89f75e4ffd35a63762e82abc1b9d026fd28af89ea00f525021e9362ae71fdf59
 
 Distribution contents
 ---------------------

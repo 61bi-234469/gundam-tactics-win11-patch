@@ -44,9 +44,15 @@ def main() -> int:
     env = os.environ.copy()
     mingw_bin = str(gcc.parent)
     env["PATH"] = mingw_bin + os.pathsep + env.get("PATH", "")
-    qtim_cmd = common + [
+    # The version the menu shows (GT_PATCH_VERSION=1.4.0); unset: a dev build.
+    version = os.environ.get("GT_PATCH_VERSION", "").strip()
+    version_define = (
+        [f'-DGT_PATCH_VERSION_W=L"v{version}"'] if version else []
+    )
+    qtim_cmd = common + version_define + [
         "-o", "QTIM32.dll",
-        "qtim_compat_proxy.c", "movdec.c", "display_scale.c", "startup_diag.c",
+        "qtim_compat_proxy.c", "movdec.c", "display_scale.c", "menu_tools.c",
+        "startup_diag.c",
         "qtim_compat_proxy.def",
         "-luser32", "-lgdi32", "-lwinmm",
     ]

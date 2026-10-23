@@ -40,6 +40,11 @@ static uint32_t g_last_journal_generation = 0;
 static int g_journal_desynced = 0;
 static CRITICAL_SECTION g_cmgr_lock;
 static int g_cmgr_lock_ready = 0;
+/* The last stock controller the game idled (MCDoAction(controller,
+ * mcActionIdle, 0) through the 0x430974 thunk), for the QTIM proxy to keep
+ * stock QuickTime (cvid) movies running while the window is dragged. */
+static volatile LONG g_stock_idle_controller = 0;
+static volatile LONG g_stock_idle_tick = 0;
 
 static int build_trace_ini_path(HMODULE self, char *path, size_t path_size) {
     char module_path[MAX_PATH];
@@ -344,7 +349,20 @@ uint32_t __cdecl compat_dispatch(uint32_t *f) {
                                  controller_handle, movie_handle);
         return handled_result(f, 0);
     }
+    if (sel == 0x01 && arg1 == 1 && arg0 && !fake_controller_format(arg0)) {
+        InterlockedExchange(&g_stock_idle_tick, (LONG)GetTickCount());
+        InterlockedExchange(&g_stock_idle_controller, (LONG)arg0);
+    }
     return 0;
+}
+
+/* For the QTIM proxy (by name): the last stock controller idled and when. */
+uint32_t __stdcall GtLastStockIdle(DWORD *tick) {
+    uint32_t controller = (uint32_t)InterlockedCompareExchange(
+        &g_stock_idle_controller, 0, 0);
+    if (tick) *tick = (DWORD)InterlockedCompareExchange(&g_stock_idle_tick,
+                                                       0, 0);
+    return controller;
 }
 
 __attribute__((naked)) void proxy_EntryPoint(void) {

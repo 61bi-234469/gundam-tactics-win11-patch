@@ -1,12 +1,13 @@
-# v1.3.0
+# v1.4.0
 param([string]$InstallPath = "")
 
 $ErrorActionPreference = "Stop"
 $ExpectedOriginalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
 $ExpectedRuntimeSha256 = "dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f"
-$ExpectedProxySha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1"
+$ExpectedProxySha256 = "6b395c569151843f6c36965b72bfbd819804a5fe76c3e284561c13bbe8fc8520"
 # QTIM32.DLL proxies of v1.0.10-v1.2.2, which this revert also removes.
 $KnownPreviousProxySha256 = @(
+    "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1",
     "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810",
     "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0",
     "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489",
@@ -16,7 +17,8 @@ $KnownPreviousProxySha256 = @(
     "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c"
 )
 $ExpectedCmgrRuntimeSha256 = "9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4"
-$ExpectedCmgrProxySha256 = "db6456350aefe2e35114b183458457d88c6e7e8974f29863bd5b83b2be3a964d"
+$KnownPreviousCmgrProxySha256 = @("db6456350aefe2e35114b183458457d88c6e7e8974f29863bd5b83b2be3a964d")
+$ExpectedCmgrProxySha256 = "89f75e4ffd35a63762e82abc1b9d026fd28af89ea00f525021e9362ae71fdf59"
 
 function Ensure-AtomicFileType {
     if (-not ([System.Management.Automation.PSTypeName]'GundamTactics.AtomicFile'.Type)) {
@@ -217,7 +219,7 @@ try {
     $cmgrHash = if (Test-Path -LiteralPath $cmgr) { Get-Sha256 $cmgr } else { $null }
     $cmgrRealHash = if (Test-Path -LiteralPath $cmgrReal) { Get-Sha256 $cmgrReal } else { $null }
     if ($cmgrRealHash -eq $ExpectedCmgrRuntimeSha256) {
-        if ($cmgrHash -and $cmgrHash -ne $ExpectedCmgrProxySha256 -and $cmgrHash -ne $ExpectedCmgrRuntimeSha256) { throw "CMGR32.DLL is neither the known proxy nor the original runtime." }
+        if ($cmgrHash -and $cmgrHash -ne $ExpectedCmgrProxySha256 -and $cmgrHash -ne $ExpectedCmgrRuntimeSha256 -and $KnownPreviousCmgrProxySha256 -notcontains $cmgrHash) { throw "CMGR32.DLL is neither the known proxy nor the original runtime." }
         $cmgrStage = Stage-Bytes $cmgr ([IO.File]::ReadAllBytes($cmgrReal)) $ExpectedCmgrRuntimeSha256
         $staged += $cmgrStage
     } elseif ($cmgrHash -eq $ExpectedCmgrRuntimeSha256 -and $null -eq $cmgrRealHash) {

@@ -4,3 +4,4 @@ EXPORTS
     _CMgrInitialize   = proxy_CMgrInitialize   @3
     _CMgrTerminate    = proxy_CMgrTerminate    @4
     _CMgrTerminateTask = proxy_CMgrTerminateTask @5
+    GtLastStockIdle   = GtLastStockIdle@4      @200

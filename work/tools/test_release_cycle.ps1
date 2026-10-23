@@ -15,7 +15,8 @@ $releaseDir = Join-Path $repoRoot "release\GundamTactics_Win11Patch"
 $checksumEntries = @("install.bat", "uninstall.bat", "README.txt", "CHANGELOG.txt", "patch_files/install.ps1", "patch_files/apply.ps1", "patch_files/revert.ps1", "patch_files/import96.ps1", "patch_files/QTIM32.dll", "patch_files/CMGR32.dll")
 $expectedEntries = @($checksumEntries + "checksums.txt")
 $originalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
-$patchedSha256 = "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238"
+$patchedSha256 = "77a2b963068f4a1b794bea234b737d1c28770a5615b1d788d6b77306c21771cd"
+$phase6PatchedSha256 = "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238"
 $phase5PatchedSha256 = "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4"
 $phase4PatchedSha256 = "c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942"
 $legacyPatchedSha256 = "82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4"
@@ -30,6 +31,14 @@ if (-not $testRoot.StartsWith($runRoot + [IO.Path]::DirectorySeparatorChar, [Str
 }
 $shortTestRoot = $null
 if (-not (Test-Path -LiteralPath $sourceDir)) { throw "source_exe_01 not found: $sourceDir" }
+
+# Takes Phase 7 (the multi-instance check and its code cave) back out of a
+# patched executable, giving the v1.3.0 (Phase 6) bytes.
+function Undo-Phase7([byte[]]$Data) {
+    [byte[]]$check = @(0x85,0xc0,0x74,0x22,0x6a,0x10)
+    [Array]::Copy($check, 0, $Data, 0xE514, $check.Length)
+    [Array]::Clear($Data, 0x378D0, 108)
+}
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -260,11 +269,26 @@ try {
     Invoke-Revert $cycle
     Assert-CleanRevert $cycle "cycle final revert"
 
+    Write-Host "--- v1.3.0 install (Phase 6 executable) upgrades from gundam.exe.orig ---"
+    $upgrade130 = New-TestCopy "upgrade130"
+    $upgrade130Exe = Join-Path $upgrade130 "gundam.exe"
+    Invoke-Apply $upgrade130
+    [byte[]]$phase6Bytes = [IO.File]::ReadAllBytes($upgrade130Exe)
+    Undo-Phase7 $phase6Bytes
+    [IO.File]::WriteAllBytes($upgrade130Exe, $phase6Bytes)
+    Assert-Hash $upgrade130Exe $phase6PatchedSha256 "upgrade130 v1.3.0 gundam.exe"
+    Invoke-Apply $upgrade130
+    Assert-Hash $upgrade130Exe $patchedSha256 "upgrade130 patched gundam.exe"
+    Assert-Hash (Join-Path $upgrade130 "gundam.exe.orig") $originalSha256 "upgrade130 gundam.exe.orig"
+    Invoke-Revert $upgrade130
+    Assert-CleanRevert $upgrade130 "upgrade130 final revert"
+
     Write-Host "--- v1.2.2 install (Phase 5 executable) upgrades from gundam.exe.orig ---"
     $upgrade122 = New-TestCopy "upgrade122"
     $upgrade122Exe = Join-Path $upgrade122 "gundam.exe"
     Invoke-Apply $upgrade122
     [byte[]]$phase5Bytes = [IO.File]::ReadAllBytes($upgrade122Exe)
+    Undo-Phase7 $phase5Bytes
     $phase5Bytes[0x8696] = 0x8c
     [IO.File]::WriteAllBytes($upgrade122Exe, $phase5Bytes)
     Assert-Hash $upgrade122Exe $phase5PatchedSha256 "upgrade122 v1.2.2 gundam.exe"
@@ -281,6 +305,7 @@ try {
     [byte[]]$phase4Bytes = [IO.File]::ReadAllBytes($upgrade15Exe)
     [byte[]]$stretchCall = @(0xff,0x15,0x78,0xc2,0x44,0x00)
     [Array]::Copy($stretchCall, 0, $phase4Bytes, 0x678C, $stretchCall.Length)
+    Undo-Phase7 $phase4Bytes
     $phase4Bytes[0x8696] = 0x8c
     [Array]::Clear($phase4Bytes, 0x37980, 76)
     [IO.File]::WriteAllBytes($upgrade15Exe, $phase4Bytes)
@@ -297,6 +322,7 @@ try {
     Invoke-Apply $upgrade
     [byte[]]$legacyBytes = [IO.File]::ReadAllBytes($upgradeExe)
     [Array]::Copy($stretchCall, 0, $legacyBytes, 0x678C, $stretchCall.Length)
+    Undo-Phase7 $legacyBytes
     $legacyBytes[0x8696] = 0x8c
     [Array]::Clear($legacyBytes, 0x37980, 76)
     [byte[]]$getcwdWrapper = @(0x8b,0x44,0x24,0x08,0x8b,0x4c,0x24,0x04,0x50,0x51,0x6a,0x00,0xe8,0x0f,0x00,0x00,0x00,0x83,0xc4,0x0c,0xc3)
@@ -314,7 +340,8 @@ try {
         @{ Version = "v1.0.16"; Sha256 = "ce481563d035c5ba09883b7e00967ba73557969366657f31a00b7afa0c710af2" },
         @{ Version = "v1.2.0"; Sha256 = "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489" },
         @{ Version = "v1.2.1"; Sha256 = "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0" },
-        @{ Version = "v1.2.2"; Sha256 = "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810" }
+        @{ Version = "v1.2.2"; Sha256 = "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810" },
+        @{ Version = "v1.3.0"; Sha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1" }
     )) {
         $label = "proxyupgrade" + ($previous.Version -replace "[^0-9]", "")
         Write-Host ("--- {0} QTIM32 proxy upgrades in place; revert removes MidiLoop copies ---" -f $previous.Version)
@@ -331,10 +358,19 @@ try {
                 $target = [IO.File]::Create((Join-Path $proxyUpgrade "QTIM32.DLL"))
                 try { $stream.CopyTo($target) } finally { $target.Dispose() }
             } finally { $stream.Dispose() }
+            $cmgrEntry = $previousArchive.GetEntry("patch_files/CMGR32.dll")
+            if ($cmgrEntry) {
+                $stream = $cmgrEntry.Open()
+                try {
+                    $target = [IO.File]::Create((Join-Path $proxyUpgrade "CMGR32.DLL"))
+                    try { $stream.CopyTo($target) } finally { $target.Dispose() }
+                } finally { $stream.Dispose() }
+            }
         } finally { $previousArchive.Dispose() }
         Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") $previous.Sha256 ("{0} {1} QTIM32.DLL" -f $label, $previous.Version)
         Invoke-Apply $proxyUpgrade
         Assert-Hash (Join-Path $proxyUpgrade "QTIM32.DLL") $proxySha256 "$label upgraded QTIM32.DLL"
+        Assert-Hash (Join-Path $proxyUpgrade "CMGR32.DLL") $cmgrProxySha256 "$label upgraded CMGR32.DLL"
         Assert-Hash (Join-Path $proxyUpgrade "QTIM32R.DLL") $runtimeSha256 "$label QTIM32R.DLL"
         $midiLoop = Join-Path $proxyUpgrade "MidiLoop"
         New-Item -ItemType Directory -Path $midiLoop -Force | Out-Null
@@ -619,7 +655,7 @@ try {
         Write-Host "--- skipped 1996 edition tests: source_iso_96\GundamTactics.iso not found ---"
     }
 
-    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12/v1.0.15/v1.2.2 executable upgrades, v1.0.14/v1.0.16/v1.2.0/v1.2.1/v1.2.2 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
+    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12/v1.0.15/v1.2.2/v1.3.0 executable upgrades, v1.0.14/v1.0.16/v1.2.0/v1.2.1/v1.2.2/v1.3.0 QTIM32 and CMGR32 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
 } finally {
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_AFTER_APP_COMPAT -ErrorAction SilentlyContinue
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue

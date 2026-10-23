@@ -1,6 +1,46 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.4.0 - 2026-10-24
+--------------------
+- Menu bar on the game window (with window scaling, the default): exit
+  (the game's own confirmation), window size 1-4x, fullscreen, stretch
+  filter, hide the bar (the title bar's right-click menu brings it back),
+  screenshot (576x416 PNG in Pictures\GundamTactics), open the screenshot,
+  save and game folders and qtim_compat.ini, and an about window (patch
+  version and the guide/release/source links, while the game keeps
+  running). Choices are saved in qtim_compat.ini. Alt alone no
+  longer moves the keyboard into a menu. `scale=1` now means 1x with the
+  menu bar and resizing (it used to mean off).
+- The window's position and size (and whether it was maximized) are
+  remembered in qtim_compat.ini's [window] and used at the next start; a
+  window that would be off screen is moved back. The View menu can turn
+  this off or reset it (`[display]` `remember_window=0`).
+- Several copies of the game can run at the same time when
+  qtim_compat.ini allows it (`[game]` `multi_instance=1`, per game folder;
+  not in the menu). It is off by default, so a second copy shows the
+  original ERROR box as before.
+  gundam.exe Phase 7 makes the start-up check read that setting. All copies
+  share the save folder: see README.
+- The window can be moved during the startup logo, QuickTime's
+  initialisation, waits, loads, music changes and movies, and movies keep
+  playing while it is dragged by the title bar. The cursor is visible over
+  the title bar during the startup logo, and no longer stays a busy cursor
+  over the title bar and menu bar while the game starts.
+- The game's message boxes (such as the exit confirmation) appear centred
+  on the game window. Windows centres them on the screen, where the
+  original 576x416 window used to be, so after moving or enlarging the
+  window they appeared away from it.
+- Moving the window or opening the menu during the startup logo no longer
+  makes the opening unskippable for longer. The game blocks clicks for
+  5 s after the last message it read itself (about 1.9 s into the opening
+  here); the patch's own message handling on the game's thread used to
+  count as such a message (3.7 s after a drag). GetMessageTime now reports
+  the time of the last message the game read.
+- apply.ps1 and revert.ps1 accept the v1.3.0 gundam.exe and QTIM32 proxy
+  and the CMGR32 proxy of v1.0.10-v1.3.0, and upgrade or remove them in
+  place (the CMGR32 proxy changed for the first time since v1.0.10).
+
 v1.3.0 - 2026-10-17
 --------------------
 - Fades go fully black and come back to full brightness. The game's fade

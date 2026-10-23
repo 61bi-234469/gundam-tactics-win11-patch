@@ -1,4 +1,4 @@
-# v1.3.0
+# v1.4.0
 param(
     [string]$InstallPath = "",
     [switch]$RegisterAppCompat,
@@ -8,11 +8,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ExpectedOriginalSha256 = "38bde2e4513c665d1425fd00203d0000001c5b81bc37899507b6ef7129f238d3"
-$ExpectedPatchedSha256 = "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238"
+$ExpectedPatchedSha256 = "77a2b963068f4a1b794bea234b737d1c28770a5615b1d788d6b77306c21771cd"
 # Older patched executables, upgraded by rebuilding from gundam.exe.orig:
-# v1.0.2-v1.0.12 (no Phase 4 path fix), v1.0.13-v1.0.15 (no Phase 5 stretch mode)
-# and v1.0.16-v1.2.2 (no Phase 6 fade endpoints).
+# v1.0.2-v1.0.12 (no Phase 4 path fix), v1.0.13-v1.0.15 (no Phase 5 stretch mode),
+# v1.0.16-v1.2.2 (no Phase 6 fade endpoints) and v1.3.0 (no Phase 7 multi-instance setting).
 $KnownLegacyPatchedSha256 = @(
+    "505f1e8ac4746c82045ff4901975476273915ad67477e790dc9c957543909238",
     "607299a2cd7d5aeb1375cd838cd343cd81f9289311cea659d100c700d4035ec4",
     "82c92402ac9c9282992d3c343dbb7c62463a3a5e58569ff845670bf166b867d4",
     "c693d60b73cbba731dbacbea255e845e97a0dae95cc80812316a5795e4f15942"
@@ -22,9 +23,10 @@ $KnownLegacyPatchedSha256 = @(
 # (Windows MAX_PATH, kept within QuickTime's 255-byte path strings).
 $MaxFullPathBytes = 256
 $ExpectedRuntimeSha256 = "dbbe7e208955c0173d2a41a8873d1ccdacdca96e42948f861768e1dde3afc77f"
-$ExpectedProxySha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1"
-# QTIM32.DLL proxies of v1.0.10-v1.2.2; applying over one of them upgrades it.
+$ExpectedProxySha256 = "6b395c569151843f6c36965b72bfbd819804a5fe76c3e284561c13bbe8fc8520"
+# QTIM32.DLL proxies of v1.0.10-v1.3.0; applying over one of them upgrades it.
 $KnownPreviousProxySha256 = @(
+    "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1",
     "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810",
     "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0",
     "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489",
@@ -34,7 +36,9 @@ $KnownPreviousProxySha256 = @(
     "3925975d279d553fe3418e43b2bffce2c401d3eccf46ec6bdf1fb75ea3fdfd6c"
 )
 $ExpectedCmgrRuntimeSha256 = "9fc00aece0c9db38b7e7001d261a060567eb035a343f4d833e58fd163e80f9e4"
-$ExpectedCmgrProxySha256 = "db6456350aefe2e35114b183458457d88c6e7e8974f29863bd5b83b2be3a964d"
+# CMGR32.DLL proxy of v1.0.10-v1.3.0 (unchanged until then); upgraded in place.
+$KnownPreviousCmgrProxySha256 = @("db6456350aefe2e35114b183458457d88c6e7e8974f29863bd5b83b2be3a964d")
+$ExpectedCmgrProxySha256 = "89f75e4ffd35a63762e82abc1b9d026fd28af89ea00f525021e9362ae71fdf59"
 
 function Ensure-AtomicFileType {
     if (-not ([System.Management.Automation.PSTypeName]'GundamTactics.AtomicFile'.Type)) {
@@ -284,12 +288,25 @@ function Get-FadeEndpointExecutableBytes([byte[]]$Data) {
     return ,$Data
 }
 
+function Get-MultiInstanceExecutableBytes([byte[]]$Data) {
+    # Phase 7: FUN_0040F100 (WinMain's helper) quits with an ERROR box when a
+    # "Gundam" window already exists.  The check jumps to a cave that keeps
+    # that unless .\qtim_compat.ini has [game] multi_instance=1 exactly (read with the
+    # game's own GetPrivateProfileStringA import); then a second copy starts.
+    Assert-Bytes $Data 0xE514 (Convert-Hex "85 c0 74 22 6a 10 68 f8 d6 43 00") "VA 0x0040F114 single-instance check"
+    Assert-Zero $Data 0x378D0 108 "VA 0x004384D0 Phase 7 code cave"
+    Set-Bytes $Data 0xE514 (Convert-Hex "e9 b7 93 02 00 90")
+    Set-Bytes $Data 0x378D0 (Convert-Hex "85 c0 0f 84 62 6c fd ff 50 83 ec 08 8b cc 68 2a 85 43 00 6a 04 51 68 28 85 43 00 68 19 85 43 00 68 14 85 43 00 ff 15 c0 c2 44 00 66 8b 0c 24 83 c4 08 58 66 83 f9 31 0f 84 2d 6c fd ff 6a 10 e9 06 6c fd ff 67 61 6d 65 00 6d 75 6c 74 69 5f 69 6e 73 74 61 6e 63 65 00 30 00 2e 5c 71 74 69 6d 5f 63 6f 6d 70 61 74 2e 69 6e 69 00")
+    return ,$Data
+}
+
 function Get-FullPatchedExecutableBytes([byte[]]$Original) {
     [byte[]]$patched = Get-PatchedExecutableBytes $Original
     $patched = Get-Phase3DisplayExecutableBytes $patched "b"
     $patched = Get-PathFixExecutableBytes $patched
     $patched = Get-StretchModeExecutableBytes $patched
     $patched = Get-FadeEndpointExecutableBytes $patched
+    $patched = Get-MultiInstanceExecutableBytes $patched
     return ,$patched
 }
 
@@ -474,7 +491,7 @@ try {
         [byte[]]$patched = Get-FullPatchedExecutableBytes $exeBytes
         $exeStage = Stage-Bytes $exe $patched $ExpectedPatchedSha256; $staged += $exeStage
     } elseif ($KnownLegacyPatchedSha256 -contains $exeHash) {
-        # Upgrade from v1.0.2-v1.2.2: rebuild from the verified original backup.
+        # Upgrade from v1.0.2-v1.3.0: rebuild from the verified original backup.
         [byte[]]$patched = Get-FullPatchedExecutableBytes ([IO.File]::ReadAllBytes($backup))
         $exeStage = Stage-Bytes $exe $patched $ExpectedPatchedSha256; $staged += $exeStage
     }
@@ -500,6 +517,9 @@ try {
     $cmgrRealHash = if (Test-Path -LiteralPath $cmgrReal) { Get-Sha256 $cmgrReal } else { $null }
     if ($cmgrHash -eq $ExpectedCmgrProxySha256) {
         if ($cmgrRealHash -ne $ExpectedCmgrRuntimeSha256) { throw "CMGR32.DLL is already the patch proxy but CMGR32R.DLL (the original backup) is missing or modified. The original CMGR32.DLL was probably overwritten by copying the patch files straight into the game folder; restore QTIM32.DLL and CMGR32.DLL from the game CD (or reinstall the game) and run the patch again." }
+    } elseif ($cmgrHash -and $KnownPreviousCmgrProxySha256 -contains $cmgrHash -and $cmgrHash -ne $ExpectedCmgrProxySha256) {
+        if ($cmgrRealHash -ne $ExpectedCmgrRuntimeSha256) { throw "CMGR32.DLL is an older patch proxy but CMGR32R.DLL (the original backup) is missing or modified; restore QTIM32.DLL and CMGR32.DLL from the game CD (or reinstall the game) and run the patch again." }
+        $cmgrStage = Stage-Bytes $cmgr ([IO.File]::ReadAllBytes($cmgrProxy)) $ExpectedCmgrProxySha256; $staged += $cmgrStage
     } elseif ($cmgrHash -eq $ExpectedCmgrRuntimeSha256) {
         if ($cmgrRealHash -and $cmgrRealHash -ne $ExpectedCmgrRuntimeSha256) { throw "CMGR32R.DLL exists but is not the verified runtime." }
         if (-not $cmgrRealHash) { $cmgrRealStage = Stage-Bytes $cmgrReal ([IO.File]::ReadAllBytes($cmgr)) $ExpectedCmgrRuntimeSha256; $staged += $cmgrRealStage }
@@ -533,7 +553,7 @@ try {
         throw "test failure injected after AppCompat commit"
     }
     $committed = $true
-    Write-Host "v1.3.0 apply committed atomically: $gameDir"
+    Write-Host "v1.4.0 apply committed atomically: $gameDir"
     if ($wantsAppCompat) { Write-Host "AppCompat pre-state saved in $sidecar" }
 } catch {
     try {
