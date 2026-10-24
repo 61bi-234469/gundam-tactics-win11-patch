@@ -1,6 +1,22 @@
 Gundam Tactics Windows 11 compatibility patch
 CHANGELOG
 
+v1.4.1 - 2026-10-24
+--------------------
+- Fixed: after about an hour of play (sooner with frequent battle-count
+  STOP/START), the background music stopped for good and some minutes
+  later the game closed without a message. Windows 11's MIDI sequencer
+  (mciseq.dll) leaves an entry of a fixed 500-entry internal table in use
+  for every song that was played and closed, and clears the table only
+  when it is unloaded after the last song closes. Since v1.3.0 the patch
+  kept mciseq.dll loaded for its music-change handling, so the table
+  filled up; it is now unloaded as usual.
+- Fixed: the sound device of a movie whose sound was still playing when
+  the movie ended (for example when skipped by a click) was never closed,
+  so such devices piled up during long sessions.
+- apply.ps1 and revert.ps1 accept the v1.4.0 QTIM32 proxy and upgrade or
+  remove it.
+
 v1.4.0 - 2026-10-24
 --------------------
 - Menu bar on the game window (with window scaling, the default): exit

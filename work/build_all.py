@@ -51,7 +51,7 @@ RELEASE_PARENT = REPO_ROOT / "release"
 RELEASE_DIR = RELEASE_PARENT / "GundamTactics_Win11Patch"
 # The release version: names the ZIP and is shown by the proxy (Help >
 # バージョン情報) through GT_PATCH_VERSION.
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 RELEASE_ZIP = RELEASE_PARENT / f"GundamTactics_Win11Patch_v{VERSION}.zip"
 RELEASE_ZIP_CHECKSUMS = RELEASE_PARENT / "checksums_zip.txt"
 RELEASE_TEST = REPO_ROOT / "work" / "tools" / "test_release_cycle.ps1"

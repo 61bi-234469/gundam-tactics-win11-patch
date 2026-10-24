@@ -341,7 +341,8 @@ try {
         @{ Version = "v1.2.0"; Sha256 = "d3ec190e097a4a377164c985f0d314fed1b73678460fb8116a35e5fb4c815489" },
         @{ Version = "v1.2.1"; Sha256 = "054245d7e7a66e59f60d318eff2939798c066a011ba07bc19bf0e6888703dec0" },
         @{ Version = "v1.2.2"; Sha256 = "785da89f24737fae362091ecd796a9b393218156c165e3b92e273855d95b9810" },
-        @{ Version = "v1.3.0"; Sha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1" }
+        @{ Version = "v1.3.0"; Sha256 = "1ec86b68484f24652b4b33bb55970d08bba48dc722cc5af0e0287876b94c95a1" },
+        @{ Version = "v1.4.0"; Sha256 = "6b395c569151843f6c36965b72bfbd819804a5fe76c3e284561c13bbe8fc8520" }
     )) {
         $label = "proxyupgrade" + ($previous.Version -replace "[^0-9]", "")
         Write-Host ("--- {0} QTIM32 proxy upgrades in place; revert removes MidiLoop copies ---" -f $previous.Version)
@@ -655,7 +656,7 @@ try {
         Write-Host "--- skipped 1996 edition tests: source_iso_96\GundamTactics.iso not found ---"
     }
 
-    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12/v1.0.15/v1.2.2/v1.3.0 executable upgrades, v1.0.14/v1.0.16/v1.2.0/v1.2.1/v1.2.2/v1.3.0 QTIM32 and CMGR32 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
+    Write-Host "PASS: ZIP extraction, checksums, QTIM32/CMGR32 apply/revert cycle, v1.0.12/v1.0.15/v1.2.2/v1.3.0 executable upgrades, v1.0.14/v1.0.16/v1.2.0/v1.2.1/v1.2.2/v1.3.0/v1.4.0 QTIM32 and CMGR32 proxy upgrades and MidiLoop cleanup, installer (trailing-backslash path, in-game-folder auto-detect, overwritten-DLL refusal), long-path acceptance, path/non-ANSI refusal, AppCompat absent/present/refusal, rollback, and the 1996 edition disc import (copy, QuickTime expansion, re-run, save folder, conflict refusal, disc/save-folder destination refusal, injected copy/expand/move failures, rollback after apply refusal) all passed."
 } finally {
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_AFTER_APP_COMPAT -ErrorAction SilentlyContinue
     Remove-Item Env:GUNDAM_WIN11PATCH_TEST_FAIL_IMPORT96 -ErrorAction SilentlyContinue

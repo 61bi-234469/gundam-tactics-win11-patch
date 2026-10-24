@@ -170,8 +170,8 @@ Presses are never held: their release would then be scanned without the
 capture the press sets and arrive as `WM_NCLBUTTONUP`. The music
 switch between scenes is covered too: Windows 11's `mciseq.dll` waits for
 its stream thread with `Sleep(4)` polls during `MCI_OPEN`/`MCI_CLOSE`
-(0.7-0.8 s each), and its `Sleep` import (hooked at the game's first
-`MCI_OPEN`, see the MIDI restart below) services presses before each poll on
+(0.7-0.8 s each), and its `Sleep` import (hooked in each load of
+`mciseq.dll`, see the MIDI restart below) services presses before each poll on
 the game's thread (trace `frame_input msg=... wait_ms=...`).
 During the runtime's initialisation (0x39) its `midiOutOpen`,
 `midiOutClose` and `waveOutGetNumDevs` (about 100 ms each for the MIDI
@@ -450,9 +450,16 @@ a type name and a file name only, the proxy's `mciSendCommandA` hook replaces
 that rewind (and the rewind in its `MCI_RESUME` fallback) with a close and a
 reopen of the same file. If the device ID changes, the game's ID is translated
 until the game closes it. `mciseq.dll` waits for its stream thread with
-`Sleep(4)` polls, which made a reopen take 0.7 s in the game. The proxy keeps
-`mciseq.dll` loaded and hooks its `Sleep` import, and only while it is
-reopening does `Sleep(4)` become `Sleep(0)`; the reopen then takes about 1 ms.
+`Sleep(4)` polls, which made a reopen take 0.7 s in the game. The proxy hooks
+its `Sleep` import, and only while it is reopening does `Sleep(4)` become
+`Sleep(0)`; the reopen then takes about 1-2 ms. `mciseq.dll` must not be kept
+loaded (v1.3.0 and v1.4.0 did): on Windows 11 every sequencer that played and
+is then closed leaves an entry of its 500-entry list table in use, and only
+unloading the DLL (when the last sequencer closes) clears it, so a kept DLL
+makes every `MCI_OPEN` fail with `MCIERR_OUT_OF_MEMORY` after about 800 opens.
+The proxy therefore holds a reference to `mciseq.dll` only during each
+`MCI_OPEN` (its own reopens included) and hooks each new load of it
+(`work/tools/LONGPLAY_INVESTIGATION.md`, `work/tools/inspect_mciseq_lists.py`).
 Without that hook it does not reopen. `[audio] midi_restart_reopen=0`
 (`QTIM_MIDI_RESTART_REOPEN=0`) turns it off; it also needs `midi_loop_fix`.
 Trace: `midi_restart dev=... real=old->new ... total_ms=...`. Details:

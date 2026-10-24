@@ -60,6 +60,17 @@ typedef enum MovieAudioMode {
     AUDIO_MODE_PICTURE = 2
 } MovieAudioMode;
 
+/* The movie's whole PCM track and the real-time mode's header for it.  A
+ * header handed to WinMM must keep its address from prepare until unprepare
+ * succeeds, so this object is never copied: a movie owns it by pointer and
+ * passes the pointer on to its AudioTeardown. */
+typedef struct AudioFull {
+    WAVEHDR header;
+    BYTE *data;
+    DWORD bytes;
+    int prepared;
+} AudioFull;
+
 typedef struct MovieMap {
     uint32_t handle;
     char rel_path[128];
@@ -67,10 +78,7 @@ typedef struct MovieMap {
     MovieAudioMode audio_mode;
     uint32_t last_picture_time;
     HWAVEOUT audio_out;
-    WAVEHDR audio_header;
-    BYTE *audio_buffer;
-    DWORD audio_bytes;
-    int audio_prepared;
+    AudioFull *audio_full;
     int audio_streaming;
     uint32_t audio_cursor;
     uint32_t audio_last_movie_time;
@@ -91,11 +99,11 @@ typedef struct AudioChunk {
  * object (and every driver-visible header/data buffer) on the retry queue. */
 typedef struct AudioTeardown {
     HWAVEOUT audio_out;
-    WAVEHDR audio_header;
-    BYTE *audio_buffer;
-    DWORD audio_bytes;
-    int audio_prepared;
+    AudioFull *audio_full;
     AudioChunk *audio_chunks;
+    DWORD first_try;  /* GetTickCount of the first run, 0 before it */
+    DWORD last_try;
+    int stuck_logged;
     struct AudioTeardown *next;
 } AudioTeardown;
 
@@ -1152,18 +1160,25 @@ static void midi_restart_track(MCIDEVICEID id, DWORD_PTR flags,
  * MIDI_FAST_SLEEP_MAX_MS) its Sleep(4) only yields the processor: the open
  * takes about 1-10 ms.  Otherwise each poll on the game's thread services
  * caption/border presses first, so the window can be dragged while the game
- * switches its music.  mciseq.dll is kept loaded so the hook survives the
- * close of its last device; the hook is installed at the game's first
- * MCI_OPEN. */
+ * switches its music.
+ *
+ * mciseq.dll must not be kept loaded: on Windows 11 every sequencer that has
+ * played and is then closed leaves an entry used in mciseq's 500-entry list
+ * table, and only unloading the DLL (at the close of the last sequencer)
+ * clears it.  Kept loaded, the table is full after about 800 opens (an hour
+ * of battle-count STOP/START) and every MCI_OPEN fails with
+ * MCIERR_OUT_OF_MEMORY.  So around each MCI_OPEN the proxy holds its own
+ * reference only for that call (loading the DLL if needed) and puts the hook
+ * into each new load; the open device keeps the DLL, and the hook, loaded. */
 typedef VOID (WINAPI *PFN_Sleep)(DWORD);
 enum { MIDI_FAST_SLEEP_MAX_MS = 50 };
 static PFN_Sleep volatile p_mciseq_sleep = NULL;
 static volatile LONG g_mciseq_fast_sleep = 0;
 static LONGLONG volatile g_mciseq_fast_until = 0;
-static int g_mciseq_hook_state = 0; /* 0: not tried, 1: hooked, -1: failed */
-
-static int patch_mci_iat_entry(BYTE *slot, const char *name,
-                               void *replacement, void **original);
+/* The load of mciseq.dll the hook was put into, and its Sleep slot. */
+static HMODULE volatile g_mciseq_hooked = NULL;
+static BYTE *volatile g_mciseq_slot = NULL;
+static int g_mciseq_failure_logged = 0;
 
 static VOID WINAPI mciseq_sleep_hook(DWORD ms) {
     if (ms == 4 && g_mciseq_fast_sleep) {
@@ -1210,40 +1225,84 @@ static BYTE *find_import_slot(HMODULE module, const char *name) {
     return NULL;
 }
 
-static int midi_restart_prepare(void) {
+static int write_iat_slot(BYTE *slot, DWORD value) {
+    DWORD old_protect;
+    DWORD restored_protect;
+    if (!VirtualProtect(slot, sizeof(DWORD), PAGE_READWRITE, &old_protect))
+        return 0;
+    *(DWORD *)slot = value;
+    VirtualProtect(slot, sizeof(DWORD), old_protect, &restored_protect);
+    return 1;
+}
+
+static void log_mciseq_failure(const char *result) {
+    char buf[96];
+    int written;
+    if (g_mciseq_failure_logged) return;
+    g_mciseq_failure_logged = 1;
+    written = snprintf(buf, sizeof(buf), "midi_restart\tresult=%s\n", result);
+    if (written > 0) log_text(buf);
+}
+
+/* Takes a reference to mciseq.dll (loading it if needed) and makes sure this
+ * load carries the Sleep hook.  MCI calls come from the game's thread, so
+ * this needs no lock.  The caller drops the reference with mciseq_release
+ * after its MCI call. */
+static HMODULE mciseq_acquire(void) {
     char path[MAX_PATH];
     UINT length;
     HMODULE seq;
     BYTE *slot;
-    if (g_mciseq_hook_state) return g_mciseq_hook_state > 0;
-    g_mciseq_hook_state = -1;
+    DWORD hook = (DWORD)(uintptr_t)mciseq_sleep_hook;
     length = GetSystemDirectoryA(path, sizeof(path));
-    if (!length || length + sizeof("\\mciseq.dll") > sizeof(path)) return 0;
+    if (!length || length + sizeof("\\mciseq.dll") > sizeof(path)) return NULL;
     strcat(path, "\\mciseq.dll");
     seq = LoadLibraryA(path);
     if (!seq) {
-        log_text("midi_restart\tresult=mciseq_not_loaded\n");
-        return 0;
+        log_mciseq_failure("mciseq_not_loaded");
+        return NULL;
     }
+    /* A new load may sit at the same address, so check the slot itself. */
     slot = find_import_slot(seq, "Sleep");
     if (!slot || !*(DWORD *)slot) {
-        log_text("midi_restart\tresult=sleep_import_missing\n");
-        FreeLibrary(seq);
-        return 0;
+        log_mciseq_failure("sleep_import_missing");
+        return seq;
     }
-    /* The original must be in place before the hook is visible to
-     * mciseq's own threads. */
-    p_mciseq_sleep = (PFN_Sleep)(uintptr_t)*(DWORD *)slot;
-    MemoryBarrier();
-    if (patch_mci_iat_entry(slot, "mciseq!Sleep",
-                            (void *)(uintptr_t)mciseq_sleep_hook, NULL) <= 0) {
-        /* The slot may hold the hook (with a restore record) even on
-         * failure, so mciseq.dll stays loaded either way. */
-        log_text("midi_restart\tresult=sleep_hook_failed\n");
-        return 0;
+    if (*(DWORD *)slot != hook) {
+        /* The original must be in place before the hook is visible to
+         * mciseq's own threads; it is the same Sleep in every load. */
+        if (!p_mciseq_sleep) {
+            p_mciseq_sleep = (PFN_Sleep)(uintptr_t)*(DWORD *)slot;
+            MemoryBarrier();
+        }
+        if (!write_iat_slot(slot, hook)) {
+            log_mciseq_failure("sleep_hook_failed");
+            return seq;
+        }
     }
-    g_mciseq_hook_state = 1;
-    return 1;
+    g_mciseq_slot = slot;
+    g_mciseq_hooked = seq;
+    return seq;
+}
+
+static void mciseq_release(HMODULE seq) {
+    if (seq) FreeLibrary(seq);
+}
+
+/* Whether the loaded mciseq.dll (kept by an open device) has the hook. */
+static int mciseq_hooked_now(void) {
+    HMODULE seq = GetModuleHandleA("mciseq.dll");
+    return seq && seq == g_mciseq_hooked && g_mciseq_slot &&
+        *(DWORD *)g_mciseq_slot == (DWORD)(uintptr_t)mciseq_sleep_hook;
+}
+
+/* At unload: takes the hook out of mciseq.dll if that load is still mapped.
+ * DllMain holds the loader lock, so it cannot be unloaded meanwhile. */
+static void mciseq_unhook(void) {
+    if (mciseq_hooked_now() && p_mciseq_sleep)
+        write_iat_slot(g_mciseq_slot, (DWORD)(uintptr_t)p_mciseq_sleep);
+    g_mciseq_hooked = NULL;
+    g_mciseq_slot = NULL;
 }
 
 static void midi_fast_sleep_begin(void) {
@@ -1264,12 +1323,14 @@ static void midi_fast_sleep_end(void) {
 static MCIERROR midi_restart_open(MidiRestartDevice *dev) {
     MCI_OPEN_PARMSA open;
     MCIERROR result;
+    HMODULE seq = mciseq_acquire();
     memset(&open, 0, sizeof(open));
     open.lpstrDeviceType = dev->type;
     open.lpstrElementName = dev->element;
     result = p_real_mciSendCommandA(
         0, MCI_OPEN, MCI_OPEN_TYPE | MCI_OPEN_ELEMENT | MCI_WAIT,
         (DWORD_PTR)&open);
+    mciseq_release(seq);
     if (result == 0) {
         dev->real_id = open.wDeviceID;
         dev->played = 0;
@@ -1314,7 +1375,7 @@ static MCIERROR midi_restart_reopen(MidiRestartDevice *dev, int *closed) {
     int attempts = 0;
 
     *closed = 0;
-    if (!old_id || !midi_restart_prepare()) return MCIERR_UNSUPPORTED_FUNCTION;
+    if (!old_id || !mciseq_hooked_now()) return MCIERR_UNSUPPORTED_FUNCTION;
     QueryPerformanceCounter(&start);
     midi_fast_sleep_begin();
     result = p_real_mciSendCommandA(old_id, MCI_CLOSE, MCI_WAIT, 0);
@@ -1417,9 +1478,23 @@ static int midi_loop_open(DWORD_PTR flags, DWORD_PTR param,
     return 1;
 }
 
+static MCIERROR mci_command_body(MCIDEVICEID device, UINT command,
+                                 DWORD_PTR flags, DWORD_PTR param);
+
+/* The MCI hook: an open runs with a reference to mciseq.dll held for the
+ * call, so the new device's load of it carries the Sleep hook. */
 static MCIERROR WINAPI trace_mciSendCommandA(MCIDEVICEID device, UINT command,
                                               DWORD_PTR flags,
                                               DWORD_PTR param) {
+    HMODULE seq = command == MCI_OPEN && p_real_mciSendCommandA ?
+        mciseq_acquire() : NULL;
+    MCIERROR result = mci_command_body(device, command, flags, param);
+    mciseq_release(seq);
+    return result;
+}
+
+static MCIERROR mci_command_body(MCIDEVICEID device, UINT command,
+                                 DWORD_PTR flags, DWORD_PTR param) {
     MCIERROR result;
     MCI_STATUS_PARMS status;
     DWORD mode = 0;
@@ -1432,8 +1507,6 @@ static MCIERROR WINAPI trace_mciSendCommandA(MCIDEVICEID device, UINT command,
     char opened[MAX_PATH];
     int handled = 0;
 
-    if (command == MCI_OPEN && !g_mciseq_hook_state && p_real_mciSendCommandA)
-        midi_restart_prepare();
 
     if (restart && !restart->real_id) {
         /* Dead after a failed reopen: a close just forgets it; anything
@@ -2573,6 +2646,32 @@ static int unprepare_audio_chunk(HWAVEOUT audio_out, AudioChunk *chunk) {
     return 1;
 }
 
+static void free_audio_full(AudioFull *full) {
+    if (!full) return;
+    if (full->data) HeapFree(GetProcessHeap(), 0, full->data);
+    HeapFree(GetProcessHeap(), 0, full);
+}
+
+/* Movie-audio devices: opened, closed and teardowns still waiting, so a
+ * trace shows whether every device opened for a movie is closed again. */
+static volatile LONG g_audio_devices_opened = 0;
+static volatile LONG g_audio_devices_closed = 0;
+static volatile LONG g_audio_teardown_pending = 0;
+static LONG g_audio_pending_logged = 0; /* under g_state_lock */
+
+static void log_audio_devices(const char *event, LONG pending) {
+    char buf[160];
+    int written;
+    if (g_log == INVALID_HANDLE_VALUE) return;
+    written = snprintf(buf, sizeof(buf),
+                       "%lu\taudio_devices\tevent=%s\topened=%ld\tclosed=%ld\t"
+                       "pending=%ld\n",
+                       (unsigned long)GetTickCount(), event,
+                       (long)g_audio_devices_opened,
+                       (long)g_audio_devices_closed, (long)pending);
+    if (written > 0) log_text(buf);
+}
+
 static void free_audio_chunks(MovieMap *movie) {
     AudioChunk **link;
     AudioChunk *chunk;
@@ -2611,26 +2710,51 @@ static void reap_audio_chunks(MovieMap *movie) {
     }
 }
 
+enum { AUDIO_TEARDOWN_RETRY_MS = 100, AUDIO_TEARDOWN_STUCK_MS = 5000 };
+
+static void log_audio_teardown_stuck(AudioTeardown *teardown, DWORD now,
+                                     const char *result) {
+    char buf[160];
+    int written;
+    if (teardown->stuck_logged || g_log == INVALID_HANDLE_VALUE) return;
+    if ((DWORD)(now - teardown->first_try) < AUDIO_TEARDOWN_STUCK_MS) return;
+    teardown->stuck_logged = 1;
+    written = snprintf(buf, sizeof(buf),
+                       "%lu\taudio_teardown_stuck\tresult=%s\tage_ms=%lu\n",
+                       (unsigned long)now, result,
+                       (unsigned long)(now - teardown->first_try));
+    if (written > 0) log_text(buf);
+}
+
 static int audio_teardown_run(AudioTeardown *teardown) {
     AudioChunk **link;
     AudioChunk *chunk;
     MMRESULT result;
     int complete = 1;
+    const char *failed = "none";
+    DWORD now = GetTickCount();
 
     if (!teardown) return 1;
+    if (!teardown->first_try) teardown->first_try = now ? now : 1;
+    teardown->last_try = now;
     if (teardown->audio_out) {
         result = waveOutReset(teardown->audio_out);
-        if (result != MMSYSERR_NOERROR) complete = 0;
-        if (teardown->audio_prepared) {
+        if (result != MMSYSERR_NOERROR) {
+            complete = 0;
+            failed = "reset";
+        }
+        if (teardown->audio_full && teardown->audio_full->prepared) {
+            /* The header WinMM was given, at the address it was given. */
             result = waveOutUnprepareHeader(teardown->audio_out,
-                                             &teardown->audio_header,
-                                             sizeof(teardown->audio_header));
+                                             &teardown->audio_full->header,
+                                             sizeof(teardown->audio_full->header));
             if (result == MMSYSERR_NOERROR) {
-                teardown->audio_prepared = 0;
+                teardown->audio_full->prepared = 0;
             } else {
                 /* In particular, WAVERR_STILLPLAYING keeps the header and
                  * its backing buffer alive for the next retry. */
                 complete = 0;
+                failed = "unprepare";
             }
         }
         link = &teardown->audio_chunks;
@@ -2639,54 +2763,52 @@ static int audio_teardown_run(AudioTeardown *teardown) {
             if (chunk->prepared &&
                 !unprepare_audio_chunk(teardown->audio_out, chunk)) {
                 complete = 0;
+                failed = "unprepare_chunk";
                 link = &chunk->next;
                 continue;
             }
             *link = chunk->next;
             free_audio_chunk(chunk);
         }
-        if (complete && !teardown->audio_prepared &&
-            !teardown->audio_chunks) {
+        if (complete && !teardown->audio_chunks) {
             result = waveOutClose(teardown->audio_out);
             if (result == MMSYSERR_NOERROR) {
                 teardown->audio_out = NULL;
+                InterlockedIncrement(&g_audio_devices_closed);
+                log_audio_devices("close", g_audio_teardown_pending);
             } else {
                 /* Never discard a handle after a failed close. */
                 complete = 0;
+                failed = "close";
             }
         }
     }
-    if (!teardown->audio_out && !teardown->audio_prepared &&
-        !teardown->audio_chunks) {
-        if (teardown->audio_buffer)
-            HeapFree(GetProcessHeap(), 0, teardown->audio_buffer);
-        teardown->audio_buffer = NULL;
-        teardown->audio_bytes = 0;
+    if (!teardown->audio_out && !teardown->audio_chunks &&
+        !(teardown->audio_full && teardown->audio_full->prepared)) {
+        free_audio_full(teardown->audio_full);
+        teardown->audio_full = NULL;
     } else {
         complete = 0;
     }
+    if (!complete) log_audio_teardown_stuck(teardown, now, failed);
     return complete;
 }
 
+/* Hands the movie's device, PCM/header object and chunks to a teardown by
+ * pointer: nothing WinMM may still reference is copied or cleared. */
 static AudioTeardown *detach_movie_audio_state(MovieMap *movie) {
     AudioTeardown *teardown;
     if (!movie) return NULL;
-    if (!movie->audio_out && !movie->audio_buffer && !movie->audio_chunks)
+    if (!movie->audio_out && !movie->audio_full && !movie->audio_chunks)
         return NULL;
     teardown = (AudioTeardown *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
                                           sizeof(*teardown));
     if (!teardown) return NULL;
     teardown->audio_out = movie->audio_out;
-    teardown->audio_header = movie->audio_header;
-    teardown->audio_buffer = movie->audio_buffer;
-    teardown->audio_bytes = movie->audio_bytes;
-    teardown->audio_prepared = movie->audio_prepared;
+    teardown->audio_full = movie->audio_full;
     teardown->audio_chunks = movie->audio_chunks;
     movie->audio_out = NULL;
-    memset(&movie->audio_header, 0, sizeof(movie->audio_header));
-    movie->audio_buffer = NULL;
-    movie->audio_bytes = 0;
-    movie->audio_prepared = 0;
+    movie->audio_full = NULL;
     movie->audio_streaming = 0;
     movie->audio_cursor = 0;
     movie->audio_last_movie_time = UINT32_MAX;
@@ -2699,13 +2821,14 @@ static void queue_audio_teardown_locked(AudioTeardown *teardown) {
     if (!teardown) return;
     teardown->next = g_audio_teardown_queue;
     g_audio_teardown_queue = teardown;
+    InterlockedIncrement(&g_audio_teardown_pending);
 }
 
 static int queue_movie_audio_teardown_locked(MovieMap *movie) {
     AudioTeardown *teardown;
     if (!movie) return 1;
     teardown = detach_movie_audio_state(movie);
-    if (!teardown && (movie->audio_out || movie->audio_buffer ||
+    if (!teardown && (movie->audio_out || movie->audio_full ||
                       movie->audio_chunks)) return 0;
     queue_audio_teardown_locked(teardown);
     return 1;
@@ -2718,24 +2841,45 @@ static void enqueue_audio_teardown(AudioTeardown *teardown) {
     LeaveCriticalSection(&g_state_lock);
 }
 
-static void drain_audio_teardowns(void) {
+/* Runs the queued teardowns.  One that failed is tried again at most every
+ * AUDIO_TEARDOWN_RETRY_MS (a drain runs on nearly every dispatch), unless
+ * force is set (unload). */
+static void drain_audio_teardowns_ex(int force) {
     AudioTeardown *list;
     AudioTeardown *next;
+    DWORD now;
+    LONG pending;
+    int changed;
     if (!g_locks_ready) return;
     EnterCriticalSection(&g_state_lock);
     list = g_audio_teardown_queue;
     g_audio_teardown_queue = NULL;
+    InterlockedExchange(&g_audio_teardown_pending, 0);
     LeaveCriticalSection(&g_state_lock);
+    now = GetTickCount();
     while (list) {
         next = list->next;
         list->next = NULL;
-        if (audio_teardown_run(list)) {
+        if (!force && list->first_try &&
+            (DWORD)(now - list->last_try) < AUDIO_TEARDOWN_RETRY_MS) {
+            enqueue_audio_teardown(list);
+        } else if (audio_teardown_run(list)) {
             HeapFree(GetProcessHeap(), 0, list);
         } else {
             enqueue_audio_teardown(list);
         }
         list = next;
     }
+    EnterCriticalSection(&g_state_lock);
+    pending = g_audio_teardown_pending;
+    changed = pending != g_audio_pending_logged;
+    if (changed) g_audio_pending_logged = pending;
+    LeaveCriticalSection(&g_state_lock);
+    if (changed) log_audio_devices("pending", pending);
+}
+
+static void drain_audio_teardowns(void) {
+    drain_audio_teardowns_ex(0);
 }
 
 /* Called only after the dispatcher has released g_state_lock. */
@@ -3038,13 +3182,51 @@ static void release_movie_handle_locked(uint32_t handle) {
     }
 }
 
+/* Opens the movie's device for the PCM track (a private copy, byte-swapped
+ * for 16-bit "twos").  On failure nothing is kept. */
+static int open_movie_audio_device(MovieMap *movie, const uint8_t *source,
+                                   uint32_t bytes, const WAVEFORMATEX *format,
+                                   int swap16) {
+    AudioFull *full;
+    MMRESULT result;
+    uint32_t i;
+    if (!movie || movie->audio_out || movie->audio_full || !source || !bytes)
+        return 0;
+    full = (AudioFull *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+                                  sizeof(*full));
+    if (!full) return 0;
+    full->data = (BYTE *)HeapAlloc(GetProcessHeap(), 0, bytes);
+    if (!full->data) {
+        free_audio_full(full);
+        return 0;
+    }
+    memcpy(full->data, source, bytes);
+    if (swap16) {
+        for (i = 0; i + 1 < bytes; i += 2) {
+            BYTE temp = full->data[i];
+            full->data[i] = full->data[i + 1];
+            full->data[i + 1] = temp;
+        }
+    }
+    full->bytes = bytes;
+    result = waveOutOpen(&movie->audio_out, WAVE_MAPPER, format, 0, 0,
+                         CALLBACK_NULL);
+    if (result != MMSYSERR_NOERROR) {
+        movie->audio_out = NULL;
+        free_audio_full(full);
+        return 0;
+    }
+    movie->audio_full = full;
+    InterlockedIncrement(&g_audio_devices_opened);
+    log_audio_devices("open", g_audio_teardown_pending);
+    return 1;
+}
+
 static int open_movie_audio(MovieMap *movie) {
     const MovTrackInfo *audio;
     const uint8_t *source;
     uint32_t bytes = 0;
     WAVEFORMATEX format;
-    MMRESULT result;
-    uint32_t i;
     if (!movie || !movie->decoder || movie->audio_out) return movie &&
         movie->audio_out != NULL;
     audio = movdec_audio_info(movie->decoder);
@@ -3054,16 +3236,6 @@ static int open_movie_audio(MovieMap *movie) {
     if (lstrcmpA(audio->codec, "raw ") != 0 &&
         lstrcmpA(audio->codec, "twos") != 0) return 0;
 
-    movie->audio_buffer = (BYTE *)HeapAlloc(GetProcessHeap(), 0, bytes);
-    if (!movie->audio_buffer) return 0;
-    memcpy(movie->audio_buffer, source, bytes);
-    if (lstrcmpA(audio->codec, "twos") == 0 && audio->bits_per_sample == 16) {
-        for (i = 0; i + 1 < bytes; i += 2) {
-            BYTE temp = movie->audio_buffer[i];
-            movie->audio_buffer[i] = movie->audio_buffer[i + 1];
-            movie->audio_buffer[i + 1] = temp;
-        }
-    }
     memset(&format, 0, sizeof(format));
     format.wFormatTag = WAVE_FORMAT_PCM;
     format.nChannels = audio->channels;
@@ -3071,33 +3243,35 @@ static int open_movie_audio(MovieMap *movie) {
     format.wBitsPerSample = audio->bits_per_sample ? audio->bits_per_sample : 8;
     format.nBlockAlign = (WORD)(format.nChannels * format.wBitsPerSample / 8);
     format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
-    result = waveOutOpen(&movie->audio_out, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL);
-    if (result != MMSYSERR_NOERROR) {
-        HeapFree(GetProcessHeap(), 0, movie->audio_buffer);
-        movie->audio_buffer = NULL;
-        return 0;
-    }
-    movie->audio_bytes = bytes;
-    return 1;
+    return open_movie_audio_device(
+        movie, source, bytes, &format,
+        lstrcmpA(audio->codec, "twos") == 0 && audio->bits_per_sample == 16);
 }
 
-static void start_movie_audio(MovieMap *movie) {
+/* Prepares and writes the whole track in the movie's AudioFull, in place. */
+static void write_full_movie_audio(MovieMap *movie) {
+    AudioFull *full = movie->audio_full;
     MMRESULT result;
-    if (!movie || movie->audio_streaming || movie->audio_prepared) return;
-    if (!open_movie_audio(movie)) return;
-    memset(&movie->audio_header, 0, sizeof(movie->audio_header));
-    movie->audio_header.lpData = (LPSTR)movie->audio_buffer;
-    movie->audio_header.dwBufferLength = movie->audio_bytes;
-    result = waveOutPrepareHeader(movie->audio_out, &movie->audio_header,
-                                  sizeof(movie->audio_header));
+    memset(&full->header, 0, sizeof(full->header));
+    full->header.lpData = (LPSTR)full->data;
+    full->header.dwBufferLength = full->bytes;
+    result = waveOutPrepareHeader(movie->audio_out, &full->header,
+                                  sizeof(full->header));
     if (result != MMSYSERR_NOERROR) {
         stop_movie_audio(movie);
         return;
     }
-    movie->audio_prepared = 1;
-    result = waveOutWrite(movie->audio_out, &movie->audio_header,
-                          sizeof(movie->audio_header));
+    full->prepared = 1;
+    result = waveOutWrite(movie->audio_out, &full->header,
+                          sizeof(full->header));
     if (result != MMSYSERR_NOERROR) stop_movie_audio(movie);
+}
+
+static void start_movie_audio(MovieMap *movie) {
+    if (!movie || movie->audio_streaming ||
+        (movie->audio_full && movie->audio_full->prepared)) return;
+    if (!open_movie_audio(movie) || !movie->audio_full) return;
+    write_full_movie_audio(movie);
 }
 
 /* GoToBeginning must rewind an already active real-time stream without
@@ -3105,34 +3279,23 @@ static void start_movie_audio(MovieMap *movie) {
  * this mode; picture mode uses the chunk queue below. */
 static void restart_realtime_movie_audio(MovieMap *movie) {
     MMRESULT result;
-    if (!movie || !movie->audio_out || !movie->audio_buffer ||
-        !movie->audio_bytes) return;
+    if (!movie || !movie->audio_out || !movie->audio_full ||
+        !movie->audio_full->bytes) return;
     result = waveOutReset(movie->audio_out);
     if (result != MMSYSERR_NOERROR) return;
-    if (movie->audio_prepared) {
-        result = waveOutUnprepareHeader(movie->audio_out, &movie->audio_header,
-                                         sizeof(movie->audio_header));
+    if (movie->audio_full->prepared) {
+        result = waveOutUnprepareHeader(movie->audio_out,
+                                         &movie->audio_full->header,
+                                         sizeof(movie->audio_full->header));
         if (result != MMSYSERR_NOERROR) return;
-        movie->audio_prepared = 0;
+        movie->audio_full->prepared = 0;
     }
     free_audio_chunks(movie);
     if (movie->audio_chunks) return;
     movie->audio_streaming = 0;
     movie->audio_cursor = 0;
     movie->audio_last_movie_time = UINT32_MAX;
-    memset(&movie->audio_header, 0, sizeof(movie->audio_header));
-    movie->audio_header.lpData = (LPSTR)movie->audio_buffer;
-    movie->audio_header.dwBufferLength = movie->audio_bytes;
-    result = waveOutPrepareHeader(movie->audio_out, &movie->audio_header,
-                                  sizeof(movie->audio_header));
-    if (result != MMSYSERR_NOERROR) {
-        stop_movie_audio(movie);
-        return;
-    }
-    movie->audio_prepared = 1;
-    result = waveOutWrite(movie->audio_out, &movie->audio_header,
-                          sizeof(movie->audio_header));
-    if (result != MMSYSERR_NOERROR) stop_movie_audio(movie);
+    write_full_movie_audio(movie);
 }
 
 static uint32_t movie_audio_target_bytes(const MovieMap *movie,
@@ -3141,14 +3304,15 @@ static uint32_t movie_audio_target_bytes(const MovieMap *movie,
     uint32_t movie_scale;
     uint64_t audio_time;
     uint64_t target;
-    if (!movie || !movie->decoder || !movie->audio_bytes) return 0;
+    if (!movie || !movie->decoder || !movie->audio_full ||
+        !movie->audio_full->bytes) return 0;
     audio = movdec_audio_info(movie->decoder);
     movie_scale = movdec_movie_timescale(movie->decoder);
     if (!audio || !movie_scale) return 0;
     if (audio->duration && audio->timescale) {
         audio_time = (uint64_t)movie_time * audio->timescale / movie_scale;
         if (audio_time > audio->duration) audio_time = audio->duration;
-        target = audio_time * movie->audio_bytes / audio->duration;
+        target = audio_time * movie->audio_full->bytes / audio->duration;
     } else if (audio->sample_rate && audio->channels &&
                audio->bits_per_sample) {
         target = (uint64_t)movie_time * audio->sample_rate *
@@ -3156,7 +3320,7 @@ static uint32_t movie_audio_target_bytes(const MovieMap *movie,
     } else {
         target = 0;
     }
-    if (target > movie->audio_bytes) target = movie->audio_bytes;
+    if (target > movie->audio_full->bytes) target = movie->audio_full->bytes;
     return (uint32_t)target;
 }
 
@@ -3217,7 +3381,8 @@ static void stream_movie_audio(MovieMap *movie, uint32_t movie_time) {
             HeapFree(GetProcessHeap(), 0, chunk);
             break;
         }
-        memcpy(chunk->data, movie->audio_buffer + movie->audio_cursor, bytes);
+        memcpy(chunk->data, movie->audio_full->data + movie->audio_cursor,
+               bytes);
         chunk->header.lpData = (LPSTR)chunk->data;
         chunk->header.dwBufferLength = bytes;
         result = waveOutPrepareHeader(movie->audio_out, &chunk->header,
@@ -5272,6 +5437,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
         if (g_mci_iat_hook_count && !restore_mci_iat_hooks()) {
             log_text("FATAL MCI IAT hook restoration failed\n");
         }
+        mciseq_unhook();
         if (g_gdi_iat_hook_count && !restore_gdi_iat_hooks()) {
             log_text("FATAL GDI IAT hook restoration failed\n");
         }
@@ -5285,7 +5451,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
         for (int i = 0; i < g_movie_count; i++) release_movie(&g_movies[i]);
         g_movie_count = 0;
         if (g_locks_ready) LeaveCriticalSection(&g_state_lock);
-        for (int retry = 0; retry < 3; retry++) drain_audio_teardowns();
+        for (int retry = 0; retry < 3; retry++) drain_audio_teardowns_ex(1);
         gt_controller_shared_close(&g_shared_mapping, &g_shared);
         if (g_log != INVALID_HANDLE_VALUE) {
             log_text("qtim_compat_proxy detached\n");
